@@ -1,4 +1,10 @@
-"""Curator: Bespoke Labs Synthetic Data Generation Library."""
+"""Curator: Bespoke Labs Synthetic Data Generation Library.
+
+The Prompter class serves as the main interface for structured LLM interactions,
+managing the lifecycle of prompt generation, LLM calls, and response parsing.
+
+We only support OpenAI for now. More providers in the works.
+"""
 
 import inspect
 import os
