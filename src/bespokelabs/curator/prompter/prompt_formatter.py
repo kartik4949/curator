@@ -17,6 +17,7 @@ class PromptFormatter:
         ]
     ] = None
     response_format: Optional[Type[BaseModel]] = None
+    n: int = 1
 
     def __init__(
         self,
@@ -28,11 +29,13 @@ class PromptFormatter:
             ]
         ] = None,
         response_format: Optional[Type[BaseModel]] = None,
+        n: int = 1,
     ):
         self.model_name = model_name
         self.prompt_func = prompt_func
         self.parse_func = parse_func
         self.response_format = response_format
+        self.n = n
 
     def get_generic_request(
         self, row: Dict[str, Any] | BaseModel, idx: int
@@ -65,4 +68,5 @@ class PromptFormatter:
             row_idx=idx,
             metadata=prompts,
             response_format=self.response_format,
+            n=self.n,
         )

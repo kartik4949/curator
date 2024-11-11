@@ -6,7 +6,7 @@ import re
 import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Optional, Set, Tuple, TypeVar
-
+import resource
 import aiohttp
 import requests
 import tiktoken
@@ -90,36 +90,30 @@ class OpenAIOnlineRequestProcessor(BaseRequestProcessor):
         Returns:
             dict: API specific request body
         """
+        request = {
+            "model": generic_request.model,
+            "messages": generic_request.messages,
+            "metadata": {
+                "request_idx": generic_request.row_idx,
+                "sample": generic_request.row,
+            },
+        }
+
         if generic_request.response_format:
-            request = {
-                "model": generic_request.model,
-                "messages": generic_request.messages,
-                "response_format": {
-                    "type": "json_schema",
-                    "json_schema": {
-                        # TODO(ryan): not sure if we should use strict: True or have name: be something else.
-                        "name": "output_schema",
-                        "schema": generic_request.response_format.model_json_schema(),
-                    },
-                },
-                "metadata": {
-                    "request_idx": generic_request.row_idx,
-                    "sample": generic_request.row,
+            request["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {
+                    # TODO(ryan): not sure if we should use strict: True or have name: be something else.
+                    "name": "output_schema",
+                    "schema": generic_request.response_format.model_json_schema(),
                 },
             }
-        else:
-            request = {
-                "model": generic_request.model,
-                "messages": generic_request.messages,
-                "metadata": {
-                    "request_idx": generic_request.row_idx,
-                    "sample": generic_request.row,
-                },
-            }
+        if generic_request.n > 1:
+            request["n"] = generic_request.n
 
         return request
 
-    def get_generic_response(
+    def get_generic_responses(
         self, response: Dict, prompt_formatter: PromptFormatter
     ) -> GenericResponse:
         """
@@ -133,19 +127,22 @@ class OpenAIOnlineRequestProcessor(BaseRequestProcessor):
             response: API-specific response
 
         Returns:
-            dict: Generic response body with an extra field "metadata" which contains the original dataset row or the index of the row in the original dataset
+            list[dict]: Generic response body with an extra field "metadata" which contains the original dataset row or the index of the row in the original dataset
         """
-        content = response["response"]["choices"][0]["message"]["content"]
-        if prompt_formatter.response_format:
-            content = json.loads(content)
+        responses = []
+        for choice in response["response"]["choices"]:
+            content = choice["message"]["content"]
+            if prompt_formatter.response_format:
+                content = json.loads(content)
 
-        return GenericResponse(
-            response=content,
-            row=response["metadata"][
-                "sample"
-            ],  # Or can do dataset[response["metadata"]["request_idx"]]
-            row_idx=response["metadata"]["request_idx"],
-        )
+            responses.append(
+                GenericResponse(
+                    response=content,
+                    row=response["metadata"]["sample"],
+                    row_idx=response["metadata"]["request_idx"],
+                )
+            )
+        return responses
 
     def run(
         self,
@@ -322,6 +319,12 @@ class OpenAIOnlineRequestProcessor(BaseRequestProcessor):
                 total=total_requests, desc="Processing parallel requests to OpenAI"
             )
 
+            # Increase the number of open file descriptors to avoid "Too many open files" errors
+            soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+            resource.setrlimit(
+                resource.RLIMIT_NOFILE, (min(hard, 10 * max_requests_per_minute), hard)
+            )
+
             connector = aiohttp.TCPConnector(limit=10 * max_requests_per_minute)
             async with aiohttp.ClientSession(
                 connector=connector
@@ -400,8 +403,8 @@ class OpenAIOnlineRequestProcessor(BaseRequestProcessor):
                                     retry_queue=queue_of_requests_to_retry,
                                     save_filepath=save_filepath,
                                     status_tracker=status_tracker,
-                                    get_generic_response=partial(
-                                        self.get_generic_response,
+                                    get_generic_responses=partial(
+                                        self.get_generic_responses,
                                         prompt_formatter=prompt_formatter,
                                     ),
                                 )
@@ -500,7 +503,7 @@ class APIRequest:
         retry_queue: asyncio.Queue,
         save_filepath: str,
         status_tracker: StatusTracker,
-        get_generic_response: Callable[[list], dict],
+        get_generic_responses: Callable[[list], list[GenericResponse]],
     ) -> None:
         """Calls the OpenAI API and saves results."""
         logger.debug(f"Starting request #{self.task_id}")
@@ -549,12 +552,13 @@ class APIRequest:
                 status_tracker.num_tasks_in_progress -= 1
                 status_tracker.num_tasks_failed += 1
         else:
-            data = get_generic_response(
+            generic_responses = get_generic_responses(
                 {"response": response, "metadata": self.metadata}
             )
-            data.raw_response = response
-            data.request = self.request_json
-            append_generic_response(data, save_filepath)
+            for generic_response in generic_responses:
+                generic_response.raw_response = response
+                generic_response.request = self.request_json
+                append_generic_response(generic_response, save_filepath)
             status_tracker.num_tasks_in_progress -= 1
             status_tracker.num_tasks_succeeded += 1
             logger.debug(f"Request {self.task_id} saved to {save_filepath}")

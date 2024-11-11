@@ -39,6 +39,7 @@ class Prompter:
         ] = None,
         response_format: Optional[Type[BaseModel]] = None,
         batch: bool = False,
+        n: int = 1,
     ):
         """Initialize a Prompter.
 
@@ -65,7 +66,7 @@ class Prompter:
                 )
 
         self.prompt_formatter = PromptFormatter(
-            model_name, prompt_func, parse_func, response_format
+            model_name, prompt_func, parse_func, response_format, n
         )
 
         if batch:

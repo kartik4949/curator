@@ -54,9 +54,9 @@ class BaseRequestProcessor(ABC):
         pass
 
     @abstractmethod
-    def get_generic_response(
+    def get_generic_responses(
         self, response: dict, prompt_formatter: PromptFormatter, dataset: Dataset
-    ) -> GenericResponse:
+    ) -> list[GenericResponse]:
         """
         Parses a API-specific response into a generic response body.
         Does error handling on the response.
@@ -68,7 +68,7 @@ class BaseRequestProcessor(ABC):
             response (dict): API-specific response
 
         Returns:
-            dict: Generic response body with an extra field "metadata" which contains the original dataset row or the index of the row in the original dataset
+            list[dict]: List of generic response bodies with an extra field "metadata" which contains the original dataset row or the index of the row in the original dataset
         """
         pass
 

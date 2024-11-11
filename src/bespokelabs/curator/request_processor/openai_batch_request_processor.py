@@ -87,25 +87,22 @@ class OpenAIBatchRequestProcessor(BaseRequestProcessor):
             dict: API specific request body
         """
         # NOTE(Ryan): We can have a shared place that creates the body (since it is the same for both online and batch).
+        body = {
+            "model": generic_request.model,
+            "messages": generic_request.messages,
+        }
         if generic_request.response_format:
-            body = {
-                "model": generic_request.model,
-                "messages": generic_request.messages,
-                "response_format": {
-                    "type": "json_schema",
-                    "json_schema": {
-                        # TODO(ryan): not sure if this should be something else.
-                        # TODO(ryan): also not sure if we should use strict: True
-                        "name": "output_schema",
-                        "schema": generic_request.response_format.model_json_schema(),
-                    },
+            body["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {
+                    # TODO(ryan): not sure if this should be something else.
+                    # TODO(ryan): also not sure if we should use strict: True
+                    "name": "output_schema",
+                    "schema": generic_request.response_format.model_json_schema(),
                 },
             }
-        else:
-            body = {
-                "model": generic_request.model,
-                "messages": generic_request.messages,
-            }
+        if generic_request.n > 1:
+            body["n"] = generic_request.n
 
         request = {
             "custom_id": str(generic_request.row_idx),
@@ -116,9 +113,9 @@ class OpenAIBatchRequestProcessor(BaseRequestProcessor):
 
         return request
 
-    def get_generic_response(
+    def get_generic_responses(
         self, response: Dict, prompt_formatter: PromptFormatter, dataset: Dataset
-    ) -> GenericResponse:
+    ) -> list[GenericResponse]:
         """
         Parses a API-specific response into a generic response body.
         Does error handling on the response.
@@ -130,7 +127,7 @@ class OpenAIBatchRequestProcessor(BaseRequestProcessor):
             response: API-specific response
 
         Returns:
-            dict: Generic response body with an extra field "metadata" which contains the original dataset row or the index of the row in the original dataset
+            list[dict]: List of generic response bodies with an extra field "metadata" which contains the original dataset row or the index of the row in the original dataset
         """
         request_id = response["id"]
         status_code = response["response"]["status_code"]
@@ -144,25 +141,30 @@ class OpenAIBatchRequestProcessor(BaseRequestProcessor):
 
         # NOTE(Ryan): can we actually parse the response into a an OpenAI ChatCompletions object? Easier to access fields?
         # TODO(Ryan): if you add token tokens to generic response, we can parse that here too, similar to my comment above we can do that in the shared place.
-        content = response["response"]["body"]["choices"][0]["message"]["content"]
-        row_idx = int(response["custom_id"])
+        generic_responses = []
+        for choice in response["response"]["body"]["choices"]:
+            content = choice["message"]["content"]
+            row_idx = int(response["custom_id"])
 
-        if prompt_formatter.response_format:
-            content = json.loads(content)
+            if prompt_formatter.response_format:
+                content = json.loads(content)
 
-        # NOTE(Ryan): So dicts that have objects that are not JSON serializable will be converted to strings.
+            # NOTE(Ryan): So dicts that have objects that are not JSON serializable will be converted to strings.
 
-        if dataset is None:
-            dataset_row = dict()
-        else:
-            dataset_row = dataset[row_idx]
+            if dataset is None:
+                dataset_row = dict()
+            else:
+                dataset_row = dataset[row_idx]
 
-        return GenericResponse(
-            response=content,
-            row_idx=row_idx,
-            row=dataset_row,
-            raw_response=response,
-        )
+            generic_responses.append(
+                GenericResponse(
+                    response=content,
+                    row_idx=row_idx,
+                    row=dataset_row,
+                    raw_response=response,
+                )
+            )
+        return generic_responses
 
     async def asubmit_batch(self, batch_file: str) -> dict:
         async with aiofiles.open(batch_file, "rb") as file:
@@ -244,7 +246,7 @@ class OpenAIBatchRequestProcessor(BaseRequestProcessor):
         batch_watcher = BatchWatcher(working_dir, check_interval=self.check_interval)
 
         asyncio.run(
-            batch_watcher.watch(prompt_formatter, self.get_generic_response, dataset)
+            batch_watcher.watch(prompt_formatter, self.get_generic_responses, dataset)
         )
 
         dataset = self.create_dataset_files(dataset, working_dir, prompt_formatter)
@@ -289,7 +291,7 @@ class BatchWatcher:
     async def watch(
         self,
         prompt_formatter: PromptFormatter,
-        get_generic_response: Callable[[Dict], GenericResponse],
+        get_generic_responses: Callable[[Dict], list[GenericResponse]],
         dataset: Dataset,
     ) -> None:
         """Monitor the status of batches until all are completed (includes successfully, failed, expired or cancelled)."""
@@ -337,7 +339,7 @@ class BatchWatcher:
             # NOTE(Ryan): Now downloading after each check, instead of waiting until all are completed
             tasks = [
                 self.download_batch_result_file(
-                    batch, prompt_formatter, get_generic_response, dataset
+                    batch, prompt_formatter, get_generic_responses, dataset
                 )
                 for batch in newly_completed_batches
             ]
@@ -357,7 +359,7 @@ class BatchWatcher:
         self,
         batch,
         prompt_formatter: PromptFormatter,
-        get_generic_response: Callable[[Dict], GenericResponse],
+        get_generic_responses: Callable[[Dict], list[GenericResponse]],
         dataset: Dataset,
     ) -> str:
         """Download the result of a completed batch to file.
@@ -384,8 +386,11 @@ class BatchWatcher:
         with open(output_path, "w") as f:
             for raw_response in file_content.text.splitlines():
                 # TODO(Ryan): We should abstract this out
-                generic_response = get_generic_response(
+                generic_responses = get_generic_responses(
                     json.loads(raw_response), prompt_formatter, dataset
                 )
-                f.write(json.dumps(generic_response.model_dump(), default=str) + "\n")
+                for generic_response in generic_responses:
+                    f.write(
+                        json.dumps(generic_response.model_dump(), default=str) + "\n"
+                    )
         return output_path

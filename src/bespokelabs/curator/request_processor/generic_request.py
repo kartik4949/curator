@@ -9,3 +9,4 @@ class GenericRequest(BaseModel):
     row: Dict[str, Any] | str
     row_idx: int
     response_format: Optional[Type[BaseModel]] = None
+    n: int = 1
