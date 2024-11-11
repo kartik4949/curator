@@ -10,7 +10,7 @@ from typing import Optional
 import aiofiles
 from datasets import Dataset
 from datasets.arrow_writer import ArrowWriter, SchemaInferenceError
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from bespokelabs.curator.prompter.prompt_formatter import PromptFormatter
 from bespokelabs.curator.request_processor.generic_request import GenericRequest
@@ -238,9 +238,13 @@ class BaseRequestProcessor(ABC):
                             generic_response_string
                         )
                         if prompt_formatter.response_format:
-                            response.response = prompt_formatter.response_format(
-                                **response.response
-                            )
+                            try:
+                                response.response = prompt_formatter.response_format(
+                                    **response.response
+                                )
+                            except ValidationError as e:
+                                logger.warning(f"Failed to validate response: {e}")
+                                continue
 
                         if response is None:
                             failed_responses_count += 1

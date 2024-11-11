@@ -103,7 +103,8 @@ class OpenAIOnlineRequestProcessor(BaseRequestProcessor):
             request["response_format"] = {
                 "type": "json_schema",
                 "json_schema": {
-                    # TODO(ryan): not sure if we should use strict: True or have name: be something else.
+                    # TODO(ryan): not sure if we should use strict: True. Without it you might get a response that results in a Pydantic ValidationError.
+                    # or have name: be something else.
                     "name": "output_schema",
                     "schema": generic_request.response_format.model_json_schema(),
                 },
@@ -133,7 +134,11 @@ class OpenAIOnlineRequestProcessor(BaseRequestProcessor):
         for choice in response["response"]["choices"]:
             content = choice["message"]["content"]
             if prompt_formatter.response_format:
-                content = json.loads(content)
+                try:
+                    content = json.loads(content)
+                except json.JSONDecodeError:
+                    logger.warning(f"Failed to parse response as JSON: {content}")
+                    continue
 
             responses.append(
                 GenericResponse(
