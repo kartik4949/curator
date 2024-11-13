@@ -12,7 +12,6 @@ logger.setLevel(logging.INFO)
 def prompt_func(row):
     return row["conversation"][0]["content"]
 
-
 def parse_func(row, response):
     instruction = row["conversation"][0]["content"]
     return {"instruction": instruction, "new_response": response}

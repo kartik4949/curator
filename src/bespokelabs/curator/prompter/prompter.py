@@ -51,6 +51,8 @@ class Prompter:
         batch: bool = False,
         batch_size: Optional[int] = None,
         api_base: Optional[str] = "https://api.openai.com",
+        max_requests_per_minute: Optional[int] = None,
+        max_tokens_per_minute: Optional[int] = None,
     ):
         """Initialize a Prompter.
 
@@ -91,7 +93,7 @@ class Prompter:
         self.batch_mode = batch
         if batch:
             self._request_processor = OpenAIBatchRequestProcessor(
-                model=model_name, batch_size=batch_size, url=url
+                model=model_name, batch_size=batch_size, url=url, max_requests_per_minute=max_requests_per_minute, max_tokens_per_minute=max_tokens_per_minute
             )
         else:
             if batch_size is not None:
@@ -99,7 +101,7 @@ class Prompter:
                     f"Prompter argument `batch_size` {batch_size} is ignored because `batch` is False"
                 )
             self._request_processor = OpenAIOnlineRequestProcessor(
-                model=model_name, url=url
+                model=model_name, url=url, max_requests_per_minute=max_requests_per_minute, max_tokens_per_minute=max_tokens_per_minute
             )
 
     def __call__(

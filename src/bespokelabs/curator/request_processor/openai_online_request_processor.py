@@ -39,6 +39,8 @@ class OpenAIOnlineRequestProcessor(BaseRequestProcessor):
         self.model: str = model
         self.url: str = url
         self.api_key: str = api_key
+        self.max_requests_per_minute: Optional[int] = None
+        self.max_tokens_per_minute: Optional[int] = None
 
     def get_rate_limits(self) -> dict:
         """
@@ -55,37 +57,49 @@ class OpenAIOnlineRequestProcessor(BaseRequestProcessor):
         Returns:
             tuple[int, int]: A tuple containing the maximum number of requests and tokens per minute.
         """
-        if self.url.startswith("https://api.openai.com"):
-            # Send a dummy request to get rate limit information
-            response = requests.post(
-                self.url,
-                headers={"Authorization": f"Bearer {self.api_key}"},
-                json={"model": self.model, "messages": []},
-            )
+        rpm = None
+        tpm = None
 
-            rpm = int(response.headers.get("x-ratelimit-limit-requests", 0))
-            tpm = int(response.headers.get("x-ratelimit-limit-tokens", 0))
+        if self.max_requests_per_minute is not None:
+            rpm = self.max_requests_per_minute
+            logger.info(f"Manually set max_requests_per_minute to {rpm}")
 
-            if not rpm or not tpm:
-                logger.warning(
-                    "Failed to get rate limits from OpenAI API, using default values"
+        if self.max_tokens_per_minute is not None:
+            tpm = self.max_tokens_per_minute
+            logger.info(f"Manually set max_tokens_per_minute to {tpm}")
+
+        if tpm is None or rpm is None:
+            if self.url.startswith("https://api.openai.com"):
+                # Send a dummy request to get rate limit information
+                response = requests.post(
+                    self.url,
+                    headers={"Authorization": f"Bearer {self.api_key}"},
+                    json={"model": self.model, "messages": []},
                 )
-                rpm = 30_000
-                tpm = 150_000_000
 
-            logger.info(f"Automatically set max_requests_per_minute to {rpm}")
-            logger.info(f"Automatically set max_tokens_per_minute to {tpm}")
+                if tpm is None:
+                    tpm = int(response.headers.get("x-ratelimit-limit-tokens", 0))
+                    if tpm == 0:
+                        tpm = 150_000_000
+                        logger.warning(f"Failed to get x-ratelimit-limit-tokens from OpenAI API, using default values {tpm}")
+                    else:
+                        logger.info(f"Automatically set max_tokens_per_minute to {tpm}")
 
-            rate_limits = {
-                "max_requests_per_minute": rpm,
-                "max_tokens_per_minute": tpm,
-            }
+                if rpm is None:
+                    rpm = int(response.headers.get("x-ratelimit-limit-requests", 0))
+                    if rpm == 0:
+                        rpm = 30_000
+                        logger.warning(f"Failed to get x-ratelimit-limit-requests from OpenAI API, using default values {rpm}")
+                    else:
+                        logger.info(f"Automatically set max_requests_per_minute to {rpm}")
+            else:
+                raise ValueError(f"max_requests_per_minute and max_tokens_per_minute must be set if url is not https://api.openai.com")
 
-            
-        else:
-            # TODO(Mahesh): manually set here
-            return {"max_requests_per_minute": 30_000, "max_tokens_per_minute": 150_000_000}
-        
+
+        rate_limits = {
+            "max_requests_per_minute": rpm,
+            "max_tokens_per_minute": tpm,
+        }
         return rate_limits
 
     def create_api_specific_request(
