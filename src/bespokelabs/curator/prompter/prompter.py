@@ -50,6 +50,7 @@ class Prompter:
         response_format: Optional[Type[BaseModel]] = None,
         batch: bool = False,
         batch_size: Optional[int] = None,
+        api_base: Optional[str] = "https://api.openai.com",
     ):
         """Initialize a Prompter.
 
@@ -80,10 +81,17 @@ class Prompter:
         self.prompt_formatter = PromptFormatter(
             model_name, prompt_func, parse_func, response_format
         )
+
+        if api_base is not None:
+            api_base = api_base.rstrip("/")
+            url = api_base + "/v1/chat/completions"
+        else:
+            url = "https://api.openai.com/v1/chat/completions"
+
         self.batch_mode = batch
         if batch:
             self._request_processor = OpenAIBatchRequestProcessor(
-                model=model_name, batch_size=batch_size
+                model=model_name, batch_size=batch_size, url=url
             )
         else:
             if batch_size is not None:
@@ -91,7 +99,7 @@ class Prompter:
                     f"Prompter argument `batch_size` {batch_size} is ignored because `batch` is False"
                 )
             self._request_processor = OpenAIOnlineRequestProcessor(
-                model=model_name
+                model=model_name, url=url
             )
 
     def __call__(

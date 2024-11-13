@@ -55,31 +55,37 @@ class OpenAIOnlineRequestProcessor(BaseRequestProcessor):
         Returns:
             tuple[int, int]: A tuple containing the maximum number of requests and tokens per minute.
         """
-        # Send a dummy request to get rate limit information
-        response = requests.post(
-            self.url,
-            headers={"Authorization": f"Bearer {self.api_key}"},
-            json={"model": self.model, "messages": []},
-        )
-
-        rpm = int(response.headers.get("x-ratelimit-limit-requests", 0))
-        tpm = int(response.headers.get("x-ratelimit-limit-tokens", 0))
-
-        if not rpm or not tpm:
-            logger.warning(
-                "Failed to get rate limits from OpenAI API, using default values"
+        if self.url.startswith("https://api.openai.com"):
+            # Send a dummy request to get rate limit information
+            response = requests.post(
+                self.url,
+                headers={"Authorization": f"Bearer {self.api_key}"},
+                json={"model": self.model, "messages": []},
             )
-            rpm = 30_000
-            tpm = 150_000_000
 
-        logger.info(f"Automatically set max_requests_per_minute to {rpm}")
-        logger.info(f"Automatically set max_tokens_per_minute to {tpm}")
+            rpm = int(response.headers.get("x-ratelimit-limit-requests", 0))
+            tpm = int(response.headers.get("x-ratelimit-limit-tokens", 0))
 
-        rate_limits = {
-            "max_requests_per_minute": rpm,
-            "max_tokens_per_minute": tpm,
-        }
+            if not rpm or not tpm:
+                logger.warning(
+                    "Failed to get rate limits from OpenAI API, using default values"
+                )
+                rpm = 30_000
+                tpm = 150_000_000
 
+            logger.info(f"Automatically set max_requests_per_minute to {rpm}")
+            logger.info(f"Automatically set max_tokens_per_minute to {tpm}")
+
+            rate_limits = {
+                "max_requests_per_minute": rpm,
+                "max_tokens_per_minute": tpm,
+            }
+
+            
+        else:
+            # TODO(Mahesh): manually set here
+            return {"max_requests_per_minute": 30_000, "max_tokens_per_minute": 150_000_000}
+        
         return rate_limits
 
     def create_api_specific_request(
@@ -579,50 +585,6 @@ def get_token_encoding_name(model: str) -> str:
         )
         return "cl100k_base"
 
-
-def get_rate_limits(
-    model: str, request_url: str, api_key: str
-) -> Tuple[int, int]:
-    """
-    Function to get rate limits for a given annotator. Makes a single request to openAI API
-    and gets the rate limits from the response headers. These rate limits vary per model
-    and are determined by your organization's usage tier. View the following:
-    https://platform.openai.com/docs/guides/rate-limits/usage-tiers
-    https://platform.openai.com/settings/organization/limits
-
-    Args:
-        model (str): The model for which to get the rate limits.
-        request_url (str): The request URL for which to get the rate limits.
-
-    Returns:
-        Tuple[int, int]: The maximum number of requests and tokens per minute.
-    """
-    if "api.openai.com" in request_url:
-        # Send a dummy request to get rate limit information
-        response = requests.post(
-            request_url,
-            headers={"Authorization": f"Bearer {api_key}"},
-            json={"model": model, "messages": []},
-        )
-        # Extract rate limit information from headers
-        max_requests = int(
-            response.headers.get("x-ratelimit-limit-requests", 30_000)
-        )
-        max_tokens = int(
-            response.headers.get("x-ratelimit-limit-tokens", 150_000_000)
-        )
-    elif "api.sambanova.ai" in request_url:
-        # Send a dummy request to get rate limit information
-        max_requests = 50
-        max_tokens = 100_000_000
-    else:
-        raise NotImplementedError(
-            f'Rate limits for API endpoint "{request_url}" not implemented'
-        )
-
-    return max_requests, max_tokens
-
-
 def get_api_key(request_url: str) -> str:
     """Get the API key for a given request URL."""
     if "api.openai.com" in request_url:
@@ -633,7 +595,6 @@ def get_api_key(request_url: str) -> str:
         raise NotImplementedError(
             f'Default API key environment variable for API endpoint "{request_url}" not implemented'
         )
-
 
 def api_endpoint_from_url(request_url: str) -> str:
     """Extract the API endpoint from the request URL.
