@@ -52,6 +52,7 @@ class Prompter:
         batch_size: Optional[int] = None,
         temperature: Optional[float] = None,
         top_p: Optional[float] = None,
+        load_from_cache: bool = True,
     ):
         """Initialize a Prompter.
 
@@ -65,6 +66,7 @@ class Prompter:
                 response format from the LLM.
             batch (bool): Whether to use batch processing
             batch_size (Optional[int]): The size of the batch to use, only used if batch is True
+            load_from_cache (bool): Whether to load the dataset from the cache (if false, then will overwrite cache)
         """
         prompt_sig = inspect.signature(prompt_func)
         if len(prompt_sig.parameters) > 1:
@@ -98,6 +100,7 @@ class Prompter:
             self._request_processor = OpenAIOnlineRequestProcessor(
                 model=model_name, temperature=temperature, top_p=top_p
             )
+        self.load_from_cache = load_from_cache
 
     def __call__(
         self, dataset: Optional[Iterable] = None, working_dir: str = None
@@ -207,6 +210,7 @@ class Prompter:
             working_dir=os.path.join(curator_cache_dir, fingerprint),
             parse_func_hash=parse_func_hash,
             prompt_formatter=self.prompt_formatter,
+            load_from_cache=self.load_from_cache,
         )
 
         return dataset
