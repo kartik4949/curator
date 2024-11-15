@@ -14,8 +14,8 @@ success_dataset = []
 # Response
 def response_prompt_func(row):
     if "improvements" in row:
-        prompt = f"For the given instruction {row['instruction']} and response {row['new_response']}. \
-            Generate a revised response based on the feedback {row['improvements']}."
+        prompt = f"For the given instruction {row['instruction']} and response {row['new_response']}. " \
+            "Generate a revised response based on the feedback {row['improvements']}."
     else:
         prompt = f"{row['instruction']}"
     return prompt
@@ -33,7 +33,7 @@ response_prompter = curator.Prompter(
 
 # Evaluation
 MINIMUM_SCORE = 9
-print(f"Minimum evaluation score: {MINIMUM_SCORE}")
+print(f"Minimum evaluation score: {MINIMUM_SCORE}\n")
 
 
 class Evaluation(BaseModel):
@@ -44,8 +44,8 @@ class Evaluation(BaseModel):
 
 
 def evaluation_prompt_func(row):
-    prompt = f"For the given instruction {row['instruction']}. \
-        Generate an evaluation of the response {row['new_response']}."
+    prompt = f"For the given instruction {row['instruction']}. " \
+        "Generate an evaluation of the response {row['new_response']}."
     return prompt
 
 
@@ -71,12 +71,12 @@ def check_scores(dataset: Dataset):
         )
 
     success_dataset = dataset.filter(filter_func)
-    print("SUCCEEDED")
+    print("SUCCEEDED SAMPLES SCORES:")
     for row in success_dataset:
         print(row["evaluation"])
 
     failure_dataset = dataset.filter(lambda row: not filter_func(row))
-    print("FAILED")
+    print("FAILED SAMPLES SCORES:")
     for row in failure_dataset:
         print(row["evaluation"])
 
@@ -85,8 +85,8 @@ def check_scores(dataset: Dataset):
 
 # Improvement
 def improvements_prompt_func(row):
-    prompt = f"For the given instruction {row['instruction']} and response {row['new_response']}. \
-        Generate some feedback. Including points of improvement, specific suggestions, and examples if needed."
+    prompt = f"For the given instruction {row['instruction']} and response {row['new_response']}. " \
+        "Generate some feedback. Including points of improvement, specific suggestions, and examples if needed."
     return prompt
 
 
@@ -107,14 +107,16 @@ max_iterations = 4
 while len(remaining_dataset) > 0 and iterations < max_iterations:
     iterations += 1
 
+    print("Generating model responses...")
     response_dataset = response_prompter(remaining_dataset)
-    evaluation_dataset = evaluation_prompter(response_dataset)
 
+    print("Generating evaluations...")
+    evaluation_dataset = evaluation_prompter(response_dataset)
     newly_successful_dataset, remaining_dataset = check_scores(evaluation_dataset)
-    print(f"Iteration {iterations} complete. \
-            {len(newly_successful_dataset)} newly successful. \
-            {len(success_dataset)} total successful. \
-            {len(remaining_dataset)} remaining."
+    print(f"Iteration {iterations} complete. " \
+            f"{len(newly_successful_dataset)} newly successful. " \
+            f"{len(success_dataset)} total successful. " \
+            f"{len(remaining_dataset)} remaining.\n"
     )
 
     if len(newly_successful_dataset) > 0:
@@ -124,13 +126,14 @@ while len(remaining_dataset) > 0 and iterations < max_iterations:
             success_dataset = newly_successful_dataset
 
     if len(remaining_dataset) > 0:
+        print("Generating improvements...")
         improvements_dataset = improvements_prompter(remaining_dataset)
 
 # Print results
 if remaining_dataset.num_rows > 0:
-    print(f"Reached max iterations ({max_iterations}).\
-            Success dataset size ({len(success_dataset)}).\
-            Remaining dataset size ({remaining_dataset.num_rows}):")
+    print(f"Reached max iterations ({max_iterations}). " \
+            f"Success dataset size ({len(success_dataset)}). " \
+            f"Remaining dataset size ({remaining_dataset.num_rows}):")
 else:
-    print(f"Successfully completed in {iterations} iterations.\
-            Success dataset size ({len(success_dataset)}):")
+    print(f"Successfully completed in {iterations} iterations. " \
+            f"Success dataset size ({len(success_dataset)}):")
