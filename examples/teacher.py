@@ -153,7 +153,7 @@ while len(needs_improvement_dataset) > 0 and iterations < max_iterations:
 
     # Step 2: Evaluator scores the responses
     evaluation_dataset = evaluator(response_dataset)
-    # Step 3: Separate successful responses (score >= 9) from those needing improvement
+    # Step 3: Separate successful responses (all 4 criteria score >= 9) from those needing improvement
     newly_successful_dataset, needs_improvement_dataset = check_scores(
         evaluation_dataset, 9
     )
