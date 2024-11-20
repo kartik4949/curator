@@ -68,7 +68,7 @@ class JudgeResponse(BaseModel):
     score: int
 
 """
-Comment: Sometimes I want to parameterize my prompt_func, but I can only do so using a helper function 
+Comment: I want to parameterize my prompt_func, but I can only do so using a helper function 
 https://www.composingprograms.com/pages/16-higher-order-functions.html
 We should allow users, in some way pass in parameters to the prompt_func in the interface
 without having to use a helper function.
