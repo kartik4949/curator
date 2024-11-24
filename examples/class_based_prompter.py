@@ -9,6 +9,7 @@ from bespokelabs.curator.prompter.base_prompter import BasePrompter
 
 class ResponseFormat(BaseModel):
     """Example response format."""
+
     answer: str
     confidence: float
 
@@ -50,7 +51,7 @@ class MathPrompter(BasePrompter):
         # Extract answer and add confidence score
         return ResponseFormat(
             answer=response["message"],
-            confidence=0.95 if "step" in response["message"].lower() else 0.7
+            confidence=0.95 if "step" in response["message"].lower() else 0.7,
         )
 
 

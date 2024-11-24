@@ -158,8 +158,7 @@ class TestClassBasedPrompter:
             # Custom parsing that adds a prefix to the message
             if isinstance(response, MockResponseFormat):
                 return MockResponseFormat(
-                    message=f"Parsed: {response.message}",
-                    confidence=response.confidence
+                    message=f"Parsed: {response.message}", confidence=response.confidence
                 )
             return response
 
@@ -200,18 +199,18 @@ class TestClassBasedPrompter:
 
     def test_mixed_approach(self):
         """Test using class-based prompter with function-based parse_func."""
+
         def custom_parse_func(row, response):
             if isinstance(response, MockResponseFormat):
                 return MockResponseFormat(
-                    message=f"Function parsed: {response.message}",
-                    confidence=response.confidence
+                    message=f"Function parsed: {response.message}", confidence=response.confidence
                 )
             return response
 
         prompter = self.CustomPrompter(
             model_name="gpt-4o-mini",
             response_format=MockResponseFormat,
-            parse_func=custom_parse_func  # Override class-based parse_func
+            parse_func=custom_parse_func,  # Override class-based parse_func
         )
 
         result = prompter()
@@ -220,6 +219,7 @@ class TestClassBasedPrompter:
 
     def test_invalid_prompt_func(self):
         """Test that invalid prompt_func signature raises ValueError."""
+
         class InvalidPrompter(BasePrompter):
             def prompt_func(self, row, extra_arg):  # Invalid: too many parameters
                 return {"prompt": f"Process {row}"}
@@ -230,6 +230,7 @@ class TestClassBasedPrompter:
 
     def test_invalid_parse_func(self):
         """Test that invalid parse_func signature raises ValueError."""
+
         class InvalidParsePrompter(BasePrompter):
             def prompt_func(self, row=None):
                 return {"prompt": "test"}
