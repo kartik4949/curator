@@ -1,4 +1,42 @@
-"""Base class for Prompter implementations."""
+"""Base class for Prompter implementations.
+
+This module provides the abstract base class for implementing custom prompters.
+The BasePrompter class defines the interface that all prompter implementations
+must follow.
+
+Example:
+    Creating a custom prompter:
+    ```python
+    class CustomPrompter(BasePrompter):
+        def prompt_func(self, row: Optional[Dict[str, Any]] = None) -> Dict[str, str]:
+            # Generate prompts for your specific use case
+            if row is None:
+                return {
+                    "user_prompt": "Default prompt",
+                    "system_prompt": "System instructions",
+                }
+            return {
+                "user_prompt": f"Process input: {row['data']}",
+                "system_prompt": "System instructions",
+            }
+
+        def parse_func(self, row: Dict[str, Any], response: Dict[str, Any]) -> Any:
+            # Optional: Override to customize response parsing
+            return response
+
+    # Usage
+    prompter = CustomPrompter(
+        model_name="gpt-4",
+        response_format=MyResponseFormat,
+    )
+    result = prompter(dataset)  # Process dataset
+    single_result = prompter()  # Single completion
+    ```
+
+For simpler use cases where you don't need a full class implementation,
+you can use the function-based approach with the Prompter class directly.
+See the Prompter class documentation for details.
+"""
 
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional, Type, TypeVar, Union

@@ -1,4 +1,63 @@
-"""Curator: Bespoke Labs Synthetic Data Generation Library."""
+"""Curator: Bespoke Labs Synthetic Data Generation Library.
+
+This module provides the Prompter class for interacting with LLMs. It supports
+both function-based and class-based approaches to defining prompt generation
+and response parsing logic.
+
+Examples:
+    Function-based approach (simple use cases):
+    ```python
+    from bespokelabs.curator import Prompter
+
+    # Define prompt and parse functions
+    def prompt_func(row=None):
+        if row is None:
+            return {
+                "user_prompt": "Default prompt",
+                "system_prompt": "You are a helpful assistant.",
+            }
+        return {
+            "user_prompt": f"Process: {row['data']}",
+            "system_prompt": "You are a helpful assistant.",
+        }
+
+    def parse_func(row, response):
+        return {"result": response.message}
+
+    # Create prompter instance
+    prompter = Prompter(
+        model_name="gpt-4",
+        prompt_func=prompt_func,
+        parse_func=parse_func,
+        response_format=MyResponseFormat,
+    )
+
+    # Use the prompter
+    result = prompter(dataset)  # Process dataset
+    single_result = prompter()  # Single completion
+    ```
+
+    Class-based approach (complex use cases):
+    ```python
+    from bespokelabs.curator.prompter.base_prompter import BasePrompter
+
+    class CustomPrompter(BasePrompter):
+        def prompt_func(self, row=None):
+            # Your custom prompt generation logic
+            return {
+                "user_prompt": "...",
+                "system_prompt": "...",
+            }
+
+        def parse_func(self, row, response):
+            # Your custom response parsing logic
+            return response
+
+    prompter = CustomPrompter(model_name="gpt-4")
+    ```
+
+For more examples, see the examples/ directory in the repository.
+"""
 
 import inspect
 import logging
