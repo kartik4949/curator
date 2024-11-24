@@ -43,7 +43,8 @@ from typing import Any, Dict, Optional, Type, TypeVar, Union
 
 from pydantic import BaseModel
 
-T = TypeVar('T')
+T = TypeVar("T")
+
 
 class BasePrompter(ABC):
     """Abstract base class for prompter implementations.
@@ -86,7 +87,10 @@ class BasePrompter(ABC):
         self.frequency_penalty = frequency_penalty
 
     @abstractmethod
-    def prompt_func(self, row: Optional[Union[Dict[str, Any], BaseModel]] = None) -> Dict[str, str]:
+    def prompt_func(
+        self,
+        row: Optional[Union[Dict[str, Any], BaseModel]] = None,
+    ) -> Dict[str, str]:
         """Override this method to define how prompts are generated.
 
         Args:
@@ -98,8 +102,11 @@ class BasePrompter(ABC):
         """
         pass
 
-    def parse_func(self, row: Union[Dict[str, Any], BaseModel],
-                  response: Union[Dict[str, Any], BaseModel]) -> T:
+    def parse_func(
+        self,
+        row: Union[Dict[str, Any], BaseModel],
+        response: Union[Dict[str, Any], BaseModel],
+    ) -> T:
         """Override this method to define how responses are parsed.
 
         Args:

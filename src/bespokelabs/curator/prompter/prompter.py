@@ -110,13 +110,15 @@ class Prompter(BasePrompter):
         prompter = CustomPrompter(model_name="gpt-4")
     """
 
-    _prompt_func: Optional[Callable[[Optional[Union[Dict[str, Any], BaseModel]]], Dict[str, str]]]
+    _prompt_func: Optional[
+        Callable[
+            [Optional[Union[Dict[str, Any], BaseModel]]],
+            Dict[str, str],
+        ]
+    ]
     _parse_func: Optional[
         Callable[
-            [
-                Union[Dict[str, Any], BaseModel],
-                Union[Dict[str, Any], BaseModel],
-            ],
+            [Union[Dict[str, Any], BaseModel], Union[Dict[str, Any], BaseModel]],
             T,
         ]
     ]
@@ -194,44 +196,6 @@ class Prompter(BasePrompter):
             model_name, self.prompt_func, self.parse_func, response_format
         )
 
-        self.batch_mode = batch
-        if batch:
-            if batch_size is None:
-                batch_size = 1_000
-                logger.info(
-                    f"batch=True but no batch_size provided, using default batch_size of {batch_size:,}"
-                )
-            self._request_processor = OpenAIBatchRequestProcessor(
-                model=model_name,
-                batch_size=batch_size,
-                temperature=temperature,
-                top_p=top_p,
-                presence_penalty=presence_penalty,
-                frequency_penalty=frequency_penalty,
-            )
-        else:
-            if batch_size is not None:
-                logger.warning(
-                    f"Prompter argument `batch_size` {batch_size} is ignored because `batch` is False"
-                )
-            self._request_processor = OpenAIOnlineRequestProcessor(
-                model=model_name,
-                temperature=temperature,
-                top_p=top_p,
-                presence_penalty=presence_penalty,
-                frequency_penalty=frequency_penalty,
-            )
-
-        if parse_func is not None:
-            parse_sig = inspect.signature(parse_func)
-            if len(parse_sig.parameters) != 2:
-                raise ValueError(
-                    f"parse_func must take exactly 2 arguments, got {len(parse_sig.parameters)}"
-                )
-
-        self.prompt_formatter = PromptFormatter(
-            model_name, self.prompt_func, self.parse_func, response_format
-        )
         self.batch_mode = batch
         if batch:
             if batch_size is None:
