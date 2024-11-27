@@ -6,6 +6,7 @@ import io
 import sys
 from typing import Tuple, Optional
 
+
 def is_safe_ast(tree: ast.AST) -> bool:
     """Check if the AST contains only safe operations."""
     for node in ast.walk(tree):
@@ -15,13 +16,14 @@ def is_safe_ast(tree: ast.AST) -> bool:
         # Block exec/eval
         if isinstance(node, ast.Call):
             if isinstance(node.func, ast.Name):
-                if node.func.id in ['exec', 'eval', 'compile']:
+                if node.func.id in ["exec", "eval", "compile"]:
                     return False
         # Block attribute access that might be dangerous
         if isinstance(node, ast.Attribute):
-            if node.attr in ['open', 'read', 'write', 'system']:
+            if node.attr in ["open", "read", "write", "system"]:
                 return False
     return True
+
 
 def execute_math_code(code: str, timeout: int = 5) -> Tuple[Optional[str], Optional[str]]:
     """
@@ -46,7 +48,7 @@ def execute_math_code(code: str, timeout: int = 5) -> Tuple[Optional[str], Optio
 
         # Execute with timeout and output capture
         with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
-            exec(compile(tree, '<string>', 'exec'), {'__builtins__': {'print': print}}, {})
+            exec(compile(tree, "<string>", "exec"), {"__builtins__": {"print": print}}, {})
 
         error = stderr.getvalue().strip()
         if error:

@@ -4,11 +4,15 @@ import re
 from typing import List, Optional, Union
 from pydantic import BaseModel, Field, field_validator
 
+
 class MathProblem(BaseModel):
     """A math problem with its solution."""
+
     question: str = Field(description="The math problem to solve")
     python_code: str = Field(description="Python code that solves the problem")
-    expected_answer: Optional[Union[int, float, str]] = Field(None, description="Expected answer if known")
+    expected_answer: Optional[Union[int, float, str]] = Field(
+        None, description="Expected answer if known"
+    )
     explanation: Optional[str] = Field(None, description="Explanation of the solution approach")
 
     @field_validator("python_code")
@@ -33,8 +37,10 @@ class MathProblem(BaseModel):
 
         return code
 
+
 class MathSolution(BaseModel):
     """The solution to a math problem."""
+
     python_code: str = Field(description="Generated Python code that solves the problem")
     answer: Union[int, float, str] = Field(description="The computed answer")
     explanation: str = Field(description="Step-by-step explanation of the solution")
@@ -45,15 +51,21 @@ class MathSolution(BaseModel):
         """Validate Python code for safety."""
         return MathProblem.validate_python_code(code)
 
+
 class MathSolutions(BaseModel):
     """A list of math solutions."""
+
     solutions: List[MathSolution] = Field(description="List of solutions to math problems")
+
 
 class MathResult(BaseModel):
     """The result of solving a math problem."""
+
     question: str = Field(description="Original math problem")
     solution: MathSolution = Field(description="Solution details")
-    is_correct: Optional[bool] = Field(None, description="Whether the solution is correct (if expected_answer is provided)")
+    is_correct: Optional[bool] = Field(
+        None, description="Whether the solution is correct (if expected_answer is provided)"
+    )
     error: Optional[str] = Field(None, description="Error message if code execution failed")
 
     def __str__(self) -> str:
