@@ -112,33 +112,19 @@ def parse_func(row, response):
         "score": response.score,
     }
 
-# Using one criteria, helpfulness, to demonstrate the usage of the Prometheus Judge.
-judge = curator.Prompter(
-    prompt_func=get_judge_prompt_func(PrometheusJudge.HELPFULNESS),
-    parse_func=parse_func,
-    model_name="gpt-4o-mini",
-    response_format=JudgeResponse,
-)
+judged_dataset = {}
+for criteria in PrometheusJudge:
+    print(f"Generating Prometheus Judge {criteria}...")
+    judge = curator.Prompter(
+        prompt_func=get_judge_prompt_func(criteria),
+        parse_func=parse_func,
+        model_name="gpt-4o-mini",
+        response_format=JudgeResponse,
+    )
+    judged_dataset[criteria] = judge(dataset)
+    print(f"Prometheus Judge {criteria} Generation Finished.")
+    print(judged_dataset[criteria].to_pandas())
+    print(judged_dataset[criteria].to_pandas().describe())
 
-judged_dataset = judge(dataset)
-print(judged_dataset)
-
-"""
-Below: Need to fix the cache uniqueness issue to look at prompt_func dependencies. 
-As of Nov 20, it's not creating a new fingerprint for each criteria.
-"""
-# judged_dataset = {}
-# for criteria in PrometheusJudge:
-#     print(f"Generating Prometheus Judge {criteria}...")
-#     judge = curator.Prompter(
-#         prompt_func=get_judge_prompt_func(criteria),
-#         parse_func=parse_func,
-#         model_name="gpt-4o-mini",
-#         response_format=JudgeResponse,
-#     )
-#     judged_dataset[criteria] = judge(dataset)
-#     print(f"Prometheus Judge {criteria} Generation Finished.")
-#     print(judged_dataset[criteria])
-# 
-# print("All Prometheus Judges Generation Finished.")
+print("All Prometheus Judges Generation Finished.")
 
