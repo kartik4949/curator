@@ -2,10 +2,12 @@
 
 We generate 10 diverse topics and then generate 2 poems for each topic."""
 
-from bespokelabs import curator
+from typing import List
+
 from datasets import Dataset
 from pydantic import BaseModel, Field
-from typing import List
+
+from bespokelabs import curator
 
 
 # We use Pydantic and structured outputs to define the format of the response.
@@ -41,9 +43,7 @@ poet = curator.Prompter(
     model_name="gpt-4o-mini",
     response_format=Poems,
     # `row` is the input row, and `poems` is the Poems class which is parsed from the structured output from the LLM.
-    parse_func=lambda row, poems: [
-        {"topic": row["topic"], "poem": p} for p in poems.poems_list
-    ],
+    parse_func=lambda row, poems: [{"topic": row["topic"], "poem": p} for p in poems.poems_list],
 )
 
 # We apply the prompter to the topics dataset.

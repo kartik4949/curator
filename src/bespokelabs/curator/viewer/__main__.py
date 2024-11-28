@@ -1,16 +1,16 @@
+import logging
 import os
+import platform
+import shutil
+import socket
 import subprocess
 import sys
-from pathlib import Path
-from argparse import ArgumentParser
-import webbrowser
-from contextlib import closing
-import socket
-import logging
-import time
-import platform
 import tempfile
-import shutil
+import time
+import webbrowser
+from argparse import ArgumentParser
+from contextlib import closing
+from pathlib import Path
 
 
 def get_viewer_path():
@@ -32,9 +32,7 @@ def ensure_dependencies():
             print(f"Error installing dependencies: {e}")
             sys.exit(1)
         except FileNotFoundError:
-            print(
-                "Error: Node.js is not installed. Please install Node.js to run the viewer."
-            )
+            print("Error: Node.js is not installed. Please install Node.js to run the viewer.")
             sys.exit(1)
 
 
@@ -49,9 +47,7 @@ def _setup_logging(level):
 def check_node_installed():
     """Check if Node.js is installed and return version if found"""
     try:
-        result = subprocess.run(
-            ["node", "--version"], capture_output=True, text=True, check=True
-        )
+        result = subprocess.run(["node", "--version"], capture_output=True, text=True, check=True)
         return result.stdout.strip()
     except (subprocess.CalledProcessError, FileNotFoundError):
         return None
@@ -105,22 +101,16 @@ def main():
     server_file = os.path.join(viewer_path, "server.js")
 
     if not os.path.exists(os.path.join(static_dir, ".next")):
-        print(
-            "Error: Next.js build artifacts not found. The package may not be built correctly."
-        )
+        print("Error: Next.js build artifacts not found. The package may not be built correctly.")
         sys.exit(1)
 
     try:
-        subprocess.run(
-            ["node", server_file], cwd=viewer_path, env=env, check=True
-        )
+        subprocess.run(["node", server_file], cwd=viewer_path, env=env, check=True)
     except subprocess.CalledProcessError as e:
         print(f"Error starting Next.js server: {e}")
         sys.exit(1)
     except FileNotFoundError:
-        print(
-            "Error: Node.js is not installed. Please install Node.js to run the viewer."
-        )
+        print("Error: Node.js is not installed. Please install Node.js to run the viewer.")
         sys.exit(1)
 
 
