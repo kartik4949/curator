@@ -10,6 +10,7 @@ from bespokelabs.curator.request_processor.openai_online_request_processor impor
     OpenAIOnlineRequestProcessor,
 )
 
+
 def test_cache_with_api_key_changes(tmp_path):
     """Test that changing the API key handles batch reuse correctly."""
     api_key_1 = os.environ["openai_key_3"]
@@ -68,7 +69,10 @@ def test_cache_with_api_key_changes(tmp_path):
 
     # Verify no new response files were created (reusing existing ones)
     response_files_after = list(cache_dir.glob("responses_*.jsonl"))
-    assert len(response_files_after) == 2, "Should not create new response files for completed batches"
+    assert (
+        len(response_files_after) == 2
+    ), "Should not create new response files for completed batches"
+
 
 def test_cache_with_same_api_key(tmp_path):
     """Test that using the same API key reuses the cache."""
@@ -107,6 +111,7 @@ def test_cache_with_same_api_key(tmp_path):
     # Count cache directories, excluding metadata.db
     cache_dirs = [d for d in tmp_path.glob("*") if d.is_dir()]
     assert len(cache_dirs) == 1, f"Expected 1 cache directory but found {len(cache_dirs)}"
+
 
 def test_cache_ignores_api_key_in_non_batch_mode(tmp_path):
     """Test that API key changes don't affect cache in non-batch mode."""
