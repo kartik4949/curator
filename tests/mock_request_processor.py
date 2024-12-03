@@ -37,10 +37,7 @@ class MockRequestProcessor(BaseRequestProcessor):
 
     def get_rate_limits(self) -> dict:
         """Return mock rate limits."""
-        return {
-            "requests_per_minute": 1000,
-            "tokens_per_minute": 100000
-        }
+        return {"requests_per_minute": 1000, "tokens_per_minute": 100000}
 
     def create_api_specific_request(self, generic_request: GenericRequest) -> dict:
         """Create a mock API-specific request."""
@@ -76,7 +73,7 @@ class MockRequestProcessor(BaseRequestProcessor):
             "created": int(now.timestamp()),
             "model": request.model,
             "choices": [{"message": {"content": "mock response"}, "finish_reason": "stop"}],
-            "usage": {"prompt_tokens": 10, "completion_tokens": 10, "total_tokens": 20}
+            "usage": {"prompt_tokens": 10, "completion_tokens": 10, "total_tokens": 20},
         }
         return GenericResponse(
             generic_request=request,
@@ -95,11 +92,13 @@ class MockRequestProcessor(BaseRequestProcessor):
         prompt_formatter: PromptFormatter = None,
     ) -> Dataset:
         """Mock run method that creates response files and returns dataset."""
-        self.calls.append({
-            "dataset": dataset,
-            "working_dir": working_dir,
-            "parse_func_hash": parse_func_hash,
-        })
+        self.calls.append(
+            {
+                "dataset": dataset,
+                "working_dir": working_dir,
+                "parse_func_hash": parse_func_hash,
+            }
+        )
 
         # Create working directory if it doesn't exist
         if working_dir:

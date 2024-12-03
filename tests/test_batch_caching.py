@@ -3,27 +3,34 @@ from datasets import Dataset
 import pytest
 
 from bespokelabs.curator import Prompter
-from bespokelabs.curator.request_processor.openai_batch_request_processor import OpenAIBatchRequestProcessor
-from bespokelabs.curator.request_processor.openai_online_request_processor import OpenAIOnlineRequestProcessor
+from bespokelabs.curator.request_processor.openai_batch_request_processor import (
+    OpenAIBatchRequestProcessor,
+)
+from bespokelabs.curator.request_processor.openai_online_request_processor import (
+    OpenAIOnlineRequestProcessor,
+)
 from tests.mock_request_processor import MockRequestProcessor
 
 
 @pytest.fixture
 def mock_request_processor(monkeypatch):
     """Fixture to provide a mock request processor."""
+
     def mock_new(cls, *args, **kwargs):
         return MockRequestProcessor(
-            model=kwargs.get('model'),
-            batch_size=kwargs.get('batch_size', 1),
-            api_key=kwargs.get('api_key', 'test_key_1'),
-            batch_mode=True
+            model=kwargs.get("model"),
+            batch_size=kwargs.get("batch_size", 1),
+            api_key=kwargs.get("api_key", "test_key_1"),
+            batch_mode=True,
         )
-    monkeypatch.setattr(OpenAIBatchRequestProcessor, '__new__', mock_new)
-    monkeypatch.setattr(OpenAIOnlineRequestProcessor, '__new__', mock_new)
+
+    monkeypatch.setattr(OpenAIBatchRequestProcessor, "__new__", mock_new)
+    monkeypatch.setattr(OpenAIOnlineRequestProcessor, "__new__", mock_new)
 
 
 def test_cache_with_api_key_changes(tmp_path, mock_request_processor):
     """Test that changing the API key alters the cache fingerprint."""
+
     def prompt_func():
         return "Say '1'. Do not explain."
 
@@ -54,6 +61,7 @@ def test_cache_with_api_key_changes(tmp_path, mock_request_processor):
 
 def test_cache_with_same_api_key(tmp_path, mock_request_processor):
     """Test that using the same API key reuses the cache."""
+
     def prompt_func():
         return "Say '1'. Do not explain."
 
@@ -81,6 +89,7 @@ def test_cache_with_same_api_key(tmp_path, mock_request_processor):
 
 def test_cache_ignores_api_key_in_non_batch_mode(tmp_path, mock_request_processor):
     """Test that API key changes don't affect cache in non-batch mode."""
+
     def prompt_func():
         return "Say '1'. Do not explain."
 
