@@ -284,11 +284,15 @@ class OpenAIBatchRequestProcessor(BaseRequestProcessor):
                     request_file_idx = request_file_name.split("/")[-1].split("_", 1)[1]
                     response_file = f"{working_dir}/responses_{request_file_idx}"
                     if os.path.exists(response_file):
-                        logger.info(f"Batch job already completed for request file {request_file_name}")
+                        logger.info(
+                            f"Batch job already completed for request file {request_file_name}"
+                        )
                         requests_files.remove(request_file_name)
                         already_submitted += 1
                     else:
-                        logger.info(f"Batch job incomplete for request file {request_file_name}, will resubmit")
+                        logger.info(
+                            f"Batch job incomplete for request file {request_file_name}, will resubmit"
+                        )
 
             if len(requests_files) == 0:
                 logger.info(
