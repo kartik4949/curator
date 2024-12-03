@@ -330,10 +330,10 @@ class OpenAIBatchRequestProcessor(BaseRequestProcessor):
         async def watch_batches():
             batch_watcher = BatchWatcher(
                 request_processor=self,
-                working_dir=working_dir,
+                batch_dir=working_dir,
                 check_interval=self.check_interval,
-                prompt_formatter=prompt_formatter,
                 n_submitted_requests=n_submitted_requests,
+                prompt_formatter=prompt_formatter,
             )
             await batch_watcher.watch()
             await batch_watcher.close_client()
@@ -370,23 +370,31 @@ class BatchWatcher:
         self,
         request_processor: "OpenAIBatchRequestProcessor",
         batch_dir: str,
+        check_interval: int = 5,
+        n_submitted_requests: int = None,
+        prompt_formatter: Optional["PromptFormatter"] = None,
     ) -> None:
         """Initialize BatchWatcher with batch objects file and check interval.
 
         Args:
             request_processor (OpenAIBatchRequestProcessor): The request processor containing the API key.
             batch_dir (str): Directory containing the batch objects JSON file.
+            check_interval (int, optional): Interval in seconds between batch status checks. Defaults to 5.
+            n_submitted_requests (int, optional): Total number of submitted requests. Defaults to None.
+            prompt_formatter (PromptFormatter, optional): Formatter for prompts. Defaults to None.
         """
         self.client = AsyncOpenAI(api_key=request_processor.api_key)
+        self.check_interval = check_interval
+        self.working_dir = batch_dir  # Used in watch() method
         with open(f"{batch_dir}/batch_objects.jsonl", "r") as f:
             self.batch_objects = [json.loads(line) for line in f]
         self.batch_ids = [obj["id"] for obj in self.batch_objects]
         self.batch_id_to_request_file_name = {
             obj["id"]: obj["metadata"]["request_file_name"] for obj in self.batch_objects
         }
-        self.batch_dir = batch_dir
         self.tracker = BatchStatusTracker()
         self.tracker.n_submitted_batches = len(self.batch_ids)
+        self.tracker.n_submitted_requests = n_submitted_requests or len(self.batch_ids)
         self.remaining_batch_ids = set(self.batch_ids)
         self.semaphore = asyncio.Semaphore(MAX_CONCURRENT_BATCH_OPERATIONS)
 
