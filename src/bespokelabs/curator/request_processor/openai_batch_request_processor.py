@@ -387,6 +387,7 @@ class BatchWatcher:
         self.client = AsyncOpenAI(api_key=request_processor.api_key)
         self.check_interval = check_interval
         self.working_dir = batch_dir  # Used in watch() method
+        self.prompt_formatter = prompt_formatter  # Store prompt_formatter for response parsing
         with open(f"{batch_dir}/batch_objects.jsonl", "r") as f:
             self.batch_objects = [json.loads(line) for line in f]
         self.batch_ids = [obj["id"] for obj in self.batch_objects]
