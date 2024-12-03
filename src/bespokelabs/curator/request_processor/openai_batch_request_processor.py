@@ -161,7 +161,7 @@ class OpenAIBatchRequestProcessor(BaseRequestProcessor):
         self, batch_file: str, semaphore: asyncio.Semaphore | None = None
     ) -> dict:
         async with semaphore or asyncio.Semaphore():  # Use provided semaphore or dummy one
-            async_client = AsyncOpenAI()
+            async_client = AsyncOpenAI(api_key=self.api_key)
             # Create a list to store API-specific requests
             api_specific_requests = []
 
