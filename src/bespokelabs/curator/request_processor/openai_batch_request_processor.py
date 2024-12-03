@@ -367,6 +367,7 @@ class BatchStatusTracker:
 class BatchWatcher:
     def __init__(
         self,
+        request_processor: "OpenAIBatchRequestProcessor",
         working_dir: str,
         check_interval: int,
         prompt_formatter: PromptFormatter,
@@ -375,12 +376,13 @@ class BatchWatcher:
         """Initialize BatchWatcher with batch objects file and check interval.
 
         Args:
+            request_processor (OpenAIBatchRequestProcessor): The request processor containing the API key.
             working_dir (str): Directory containing the batch objects JSON file.
             check_interval (int): Time interval (in seconds) to check batch status.
             prompt_formatter (PromptFormatter): Prompt formatter to be used to format the prompt
             n_submitted_requests (int): Number of requests submitted to the batches (used for progress bar)
         """
-        self.client = AsyncOpenAI()
+        self.client = AsyncOpenAI(api_key=request_processor.api_key)
         with open(f"{working_dir}/batch_objects.jsonl", "r") as f:
             self.batch_objects = [json.loads(line) for line in f]
         self.batch_ids = [obj["id"] for obj in self.batch_objects]
