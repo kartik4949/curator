@@ -12,6 +12,8 @@ from bespokelabs.curator.request_processor.openai_online_request_processor impor
 
 def test_cache_with_api_key_changes(tmp_path):
     """Test that changing the API key handles batch reuse correctly."""
+    api_key_1 = os.environ["openai_key_3"]
+    api_key_2 = os.environ["openai_key_4"]
 
     def prompt_func():
         return "Say '1'. Do not explain."
@@ -22,9 +24,10 @@ def test_cache_with_api_key_changes(tmp_path):
     # Create first prompter with initial API key
     prompter1 = Prompter(
         prompt_func=prompt_func,
-        model_name="gpt-3.5-turbo",  # Using cheaper model for testing
+        model_name="gpt-4o-mini",  # Using cheaper model for testing
         batch=True,
         batch_size=1,  # Minimal batch size
+        api_key=api_key_1,
     )
 
     result1 = prompter1(dataset=dataset, working_dir=str(tmp_path))
@@ -38,9 +41,10 @@ def test_cache_with_api_key_changes(tmp_path):
     # Create second prompter with different API key
     prompter2 = Prompter(
         prompt_func=prompt_func,
-        model_name="gpt-3.5-turbo",
+        model_name="gpt-4o-mini",
         batch=True,
         batch_size=1,
+        api_key=api_key_2,
     )
     result2 = prompter2(dataset=dataset, working_dir=str(tmp_path))
 
@@ -51,24 +55,27 @@ def test_cache_with_api_key_changes(tmp_path):
 
 def test_cache_with_same_api_key(tmp_path):
     """Test that using the same API key reuses the cache."""
+    api_key = os.environ["openai_key_3"]
 
     def prompt_func():
         return "Say '1'. Do not explain."
 
     prompter1 = Prompter(
         prompt_func=prompt_func,
-        model_name="gpt-3.5-turbo",
+        model_name="gpt-4o-mini",
         batch=True,
         batch_size=1,
+        api_key=api_key,
     )
     result1 = prompter1(working_dir=str(tmp_path))
 
     # Create a new prompter with the same API key
     prompter2 = Prompter(
         prompt_func=prompt_func,
-        model_name="gpt-3.5-turbo",
+        model_name="gpt-4o-mini",
         batch=True,
         batch_size=1,
+        api_key=api_key,
     )
     result2 = prompter2(working_dir=str(tmp_path))
 
@@ -79,22 +86,26 @@ def test_cache_with_same_api_key(tmp_path):
 
 def test_cache_ignores_api_key_in_non_batch_mode(tmp_path):
     """Test that API key changes don't affect cache in non-batch mode."""
+    api_key_1 = os.environ["openai_key_3"]
+    api_key_2 = os.environ["openai_key_4"]
 
     def prompt_func():
         return "Say '1'. Do not explain."
 
     prompter1 = Prompter(
         prompt_func=prompt_func,
-        model_name="gpt-3.5-turbo",
+        model_name="gpt-4o-mini",
         batch=False,
+        api_key=api_key_1,
     )
     result1 = prompter1(working_dir=str(tmp_path))
 
     # Create second prompter with different API key
     prompter2 = Prompter(
         prompt_func=prompt_func,
-        model_name="gpt-3.5-turbo",
+        model_name="gpt-4o-mini",
         batch=False,
+        api_key=api_key_2,
     )
     result2 = prompter2(working_dir=str(tmp_path))
 
