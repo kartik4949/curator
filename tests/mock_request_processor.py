@@ -112,18 +112,37 @@ class MockRequestProcessor(BaseRequestProcessor):
             # Create response files for each request file
             for i, request_file in enumerate(request_files):
                 response_file = os.path.join(working_dir, f"responses_{i}.jsonl")
-                if i in self.incomplete_batches:
-                    # Simulate incomplete batch by not creating a response file
+
+                # Check if response file already exists in any cache directory
+                cache_dirs = [d for d in os.path.dirname(working_dir).glob("*") if d.is_dir()]
+                existing_response = None
+                for cache_dir in cache_dirs:
+                    potential_file = os.path.join(cache_dir, f"responses_{i}.jsonl")
+                    if os.path.exists(potential_file):
+                        existing_response = potential_file
+                        break
+
+                # Skip if this batch is marked as incomplete and no existing response
+                if i in self.incomplete_batches and not existing_response:
                     continue
+
+                # If we have an existing response, copy it
+                if existing_response:
+                    import shutil
+                    shutil.copy2(existing_response, response_file)
+                    self.processed_batches.add(i)
+                    continue
+
+                # Process new batch
+                self.processed_batches.add(i)
                 with open(request_file, "r") as rf, open(response_file, "w") as wf:
                     for line in rf:
                         request = GenericRequest.model_validate_json(line)
                         response = self._process_request(request)
                         wf.write(response.model_dump_json() + "\n")
-                self.processed_batches.add(i)
 
             # Create the dataset file if all batches are complete
-            if not self.incomplete_batches:
+            if not self.incomplete_batches or all(i in self.processed_batches for i in range(len(request_files))):
                 return self.create_dataset_files(working_dir, parse_func_hash, prompt_formatter)
 
         if dataset is None:
@@ -131,5 +150,5 @@ class MockRequestProcessor(BaseRequestProcessor):
         return dataset
 
     def mark_batch_incomplete(self, batch_index: int):
-        """Mark a specific batch as incomplete for testing purposes."""
+        """Mark a specific batch as incomplete."""
         self.incomplete_batches.add(batch_index)
