@@ -176,6 +176,8 @@ class Prompter:
                     else "text"
                 ),
                 str(self.batch_mode),
+                # Include API key in cache hash only for batch mode
+                str(self._request_processor.api_key if self.batch_mode else ""),
             ]
         )
 
