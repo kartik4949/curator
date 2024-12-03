@@ -280,9 +280,15 @@ class OpenAIBatchRequestProcessor(BaseRequestProcessor):
                 for line in f:
                     batch_object = json.loads(line)
                     request_file_name = batch_object["metadata"]["request_file_name"]
-                    logger.info(f"Batch job already submitted for request file {request_file_name}")
-                    requests_files.remove(request_file_name)
-                    already_submitted += 1
+                    # Check if we have a completed response file for this batch
+                    request_file_idx = request_file_name.split("/")[-1].split("_", 1)[1]
+                    response_file = f"{working_dir}/responses_{request_file_idx}"
+                    if os.path.exists(response_file):
+                        logger.info(f"Batch job already completed for request file {request_file_name}")
+                        requests_files.remove(request_file_name)
+                        already_submitted += 1
+                    else:
+                        logger.info(f"Batch job incomplete for request file {request_file_name}, will resubmit")
 
             if len(requests_files) == 0:
                 logger.info(
@@ -290,7 +296,7 @@ class OpenAIBatchRequestProcessor(BaseRequestProcessor):
                 )
             else:
                 logger.info(
-                    f"{already_submitted:,} out of {len(requests_files)+already_submitted:,} batch jobs already submitted. Submitting the remaining {len(requests_files):,} batch jobs."
+                    f"{already_submitted:,} out of {len(requests_files)+already_submitted:,} batch jobs completed. Submitting the remaining {len(requests_files):,} batch jobs with current API key."
                 )
 
         # Limit concurrent batch submissions to 100 so avoid overwhelming the API
