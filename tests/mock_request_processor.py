@@ -34,6 +34,8 @@ class MockRequestProcessor(BaseRequestProcessor):
         self.presence_penalty = presence_penalty
         self.frequency_penalty = frequency_penalty
         self.calls = []
+        self.incomplete_batches = set()  # Track which batch indices should be incomplete
+        self.processed_batches = set()  # Track which batch indices have been processed
 
     def get_rate_limits(self) -> dict:
         """Return mock rate limits."""
@@ -110,15 +112,24 @@ class MockRequestProcessor(BaseRequestProcessor):
             # Create response files for each request file
             for i, request_file in enumerate(request_files):
                 response_file = os.path.join(working_dir, f"responses_{i}.jsonl")
+                if i in self.incomplete_batches:
+                    # Simulate incomplete batch by not creating a response file
+                    continue
                 with open(request_file, "r") as rf, open(response_file, "w") as wf:
                     for line in rf:
                         request = GenericRequest.model_validate_json(line)
                         response = self._process_request(request)
                         wf.write(response.model_dump_json() + "\n")
+                self.processed_batches.add(i)
 
-            # Create the dataset file
-            return self.create_dataset_files(working_dir, parse_func_hash, prompt_formatter)
+            # Create the dataset file if all batches are complete
+            if not self.incomplete_batches:
+                return self.create_dataset_files(working_dir, parse_func_hash, prompt_formatter)
 
         if dataset is None:
             return Dataset.from_dict({"response": ["mock response"]})
         return dataset
+
+    def mark_batch_incomplete(self, batch_index: int):
+        """Mark a specific batch as incomplete for testing purposes."""
+        self.incomplete_batches.add(batch_index)
