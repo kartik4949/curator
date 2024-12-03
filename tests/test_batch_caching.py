@@ -54,7 +54,9 @@ def test_cache_with_api_key_changes(tmp_path, mock_request_processor):
     response_files = list(first_cache_dir.glob("responses_*.jsonl"))
     assert len(response_files) == 1, "Expected only one completed batch in first run"
     assert "responses_0.jsonl" in {f.name for f in response_files}, "Batch 0 should be completed"
-    assert "responses_1.jsonl" not in {f.name for f in response_files}, "Batch 1 should be incomplete"
+    assert "responses_1.jsonl" not in {
+        f.name for f in response_files
+    }, "Batch 1 should be incomplete"
 
     # Create second prompter with different API key
     prompter2 = Prompter(
@@ -71,12 +73,20 @@ def test_cache_with_api_key_changes(tmp_path, mock_request_processor):
     second_cache_dir = next(d for d in tmp_path.glob("*") if d != first_cache_dir and d.is_dir())
     response_files = list(second_cache_dir.glob("responses_*.jsonl"))
     assert len(response_files) == 1, "Expected only one new response file in second run"
-    assert "responses_1.jsonl" in {f.name for f in response_files}, "Batch 1 should be completed in second run"
+    assert "responses_1.jsonl" in {
+        f.name for f in response_files
+    }, "Batch 1 should be completed in second run"
 
     # Verify batch processing behavior
-    assert 0 in prompter1._request_processor.processed_batches, "Batch 0 should be processed in first run"
-    assert 1 not in prompter1._request_processor.processed_batches, "Batch 1 should not be processed in first run"
-    assert 1 in prompter2._request_processor.processed_batches, "Batch 1 should be processed in second run"
+    assert (
+        0 in prompter1._request_processor.processed_batches
+    ), "Batch 0 should be processed in first run"
+    assert (
+        1 not in prompter1._request_processor.processed_batches
+    ), "Batch 1 should not be processed in first run"
+    assert (
+        1 in prompter2._request_processor.processed_batches
+    ), "Batch 1 should be processed in second run"
 
 
 def test_cache_with_same_api_key(tmp_path, mock_request_processor):

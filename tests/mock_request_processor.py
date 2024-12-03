@@ -131,6 +131,7 @@ class MockRequestProcessor(BaseRequestProcessor):
                 # If we have an existing response, copy it
                 if existing_response:
                     import shutil
+
                     shutil.copy2(existing_response, response_file)
                     self.processed_batches.add(i)
                     continue
@@ -144,7 +145,9 @@ class MockRequestProcessor(BaseRequestProcessor):
                         wf.write(response.model_dump_json() + "\n")
 
             # Create the dataset file if all batches are complete
-            if not self.incomplete_batches or all(i in self.processed_batches for i in range(len(request_files))):
+            if not self.incomplete_batches or all(
+                i in self.processed_batches for i in range(len(request_files))
+            ):
                 return self.create_dataset_files(working_dir, parse_func_hash, prompt_formatter)
 
         if dataset is None:
