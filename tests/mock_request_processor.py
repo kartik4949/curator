@@ -3,6 +3,7 @@ from datasets import Dataset
 import json
 import os
 from datetime import datetime
+from pathlib import Path
 from bespokelabs.curator.request_processor.base_request_processor import (
     BaseRequestProcessor,
     GenericResponse,
@@ -114,7 +115,8 @@ class MockRequestProcessor(BaseRequestProcessor):
                 response_file = os.path.join(working_dir, f"responses_{i}.jsonl")
 
                 # Check if response file already exists in any cache directory
-                cache_dirs = [d for d in os.path.dirname(working_dir).glob("*") if d.is_dir()]
+                parent_dir = Path(os.path.dirname(working_dir))
+                cache_dirs = [d for d in parent_dir.glob("*") if d.is_dir()]
                 existing_response = None
                 for cache_dir in cache_dirs:
                     potential_file = os.path.join(cache_dir, f"responses_{i}.jsonl")
