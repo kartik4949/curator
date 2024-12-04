@@ -1,4 +1,5 @@
 import os
+import logging
 from datasets import Dataset
 import pytest
 
@@ -13,6 +14,8 @@ from bespokelabs.curator.request_processor.openai_online_request_processor impor
 
 def test_cache_with_api_key_changes(tmp_path):
     """Test that changing the API key handles batch reuse correctly."""
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger(__name__)
     api_key_1 = os.environ["openai_key_3"]
     api_key_2 = os.environ["openai_key_4"]
 
@@ -37,7 +40,9 @@ def test_cache_with_api_key_changes(tmp_path):
         batch_size=1,
     )
     prompter1._request_processor = request_processor1  # Set the request processor with API key
+    logger.info("Starting first batch processing run with API key 1")
     result1 = prompter1(dataset=dataset, working_dir=str(tmp_path))
+    logger.info("Completed first batch processing run")
 
     # Verify first run created response files
     cache_dir = next(d for d in tmp_path.glob("*") if d.is_dir())
@@ -61,7 +66,9 @@ def test_cache_with_api_key_changes(tmp_path):
         batch_size=1,
     )
     prompter2._request_processor = request_processor2  # Set the request processor with API key
+    logger.info("Starting second batch processing run with API key 2")
     result2 = prompter2(dataset=dataset, working_dir=str(tmp_path))
+    logger.info("Completed second batch processing run")
 
     # Verify second run reused the same cache directory and didn't resubmit completed batches
     cache_dirs = [d for d in tmp_path.glob("*") if d.is_dir()]
