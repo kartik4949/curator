@@ -24,7 +24,7 @@ def test_cache_with_api_key_changes(tmp_path):
 
     # Create first request processor with initial API key
     request_processor1 = OpenAIBatchRequestProcessor(
-        model="gpt-4o-mini",  # Using cheaper model for testing
+        model="gpt-4o-mini",  # Using cost-efficient model
         batch_size=1,  # Minimal batch size
         api_key=api_key_1,
     )
