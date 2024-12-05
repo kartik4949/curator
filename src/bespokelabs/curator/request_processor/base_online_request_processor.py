@@ -340,7 +340,9 @@ class BaseOnlineRequestProcessor(BaseRequestProcessor, ABC):
                 # Process in batches of up to 10 requests
                 if len(retry_batch) >= 10 or queue_of_requests_to_retry.empty():
                     for request in retry_batch:
-                        token_estimate = self.estimate_total_tokens(request.generic_request.messages)
+                        token_estimate = self.estimate_total_tokens(
+                            request.generic_request.messages
+                        )
                         attempt_number = 6 - request.attempts_left
                         logger.info(
                             f"Processing retry for request {request.task_id} "
