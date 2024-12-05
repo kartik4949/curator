@@ -313,7 +313,9 @@ class BaseRequestProcessor(ABC):
             logger.info(f"Read {total_responses_count} responses, {failed_responses_count} failed")
             if failed_responses_count == total_responses_count:
                 os.remove(dataset_file)
-                error_details = "\n".join(f"- {msg}" for msg in error_messages[:5])  # Show first 5 errors
+                error_details = "\n".join(
+                    f"- {msg}" for msg in error_messages[:5]
+                )  # Show first 5 errors
                 if len(error_messages) > 5:
                     error_details += f"\n...and {len(error_messages) - 5} more errors"
 

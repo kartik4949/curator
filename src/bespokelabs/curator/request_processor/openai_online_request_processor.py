@@ -287,9 +287,11 @@ class OpenAIOnlineRequestProcessor(BaseOnlineRequestProcessor):
                     raise Exception(f"Rate limit exceeded: {error_message}")
 
                 # Handle model access errors specifically
-                if (error_type == "insufficient_quota" or
-                    "access to model" in error_message.lower() or
-                    "permission" in error_message.lower()):
+                if (
+                    error_type == "insufficient_quota"
+                    or "access to model" in error_message.lower()
+                    or "permission" in error_message.lower()
+                ):
                     raise ValueError(
                         f"API key does not have access to model '{request.api_specific_request.get('model', 'unknown')}'. "
                         f"Error details: {error_message}. "
