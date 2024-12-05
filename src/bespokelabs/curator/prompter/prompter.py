@@ -6,6 +6,7 @@ import os
 from datetime import datetime
 from io import BytesIO
 from typing import Any, Callable, Dict, Iterable, Optional, Type, TypeVar, Union
+import types
 
 import dill
 from datasets import Dataset
@@ -287,13 +288,44 @@ class Prompter:
 
 
 def _get_function_hash(func) -> str:
-    """Get a hash of a function's identifier (module.qualname)."""
+    """Get a hash of a function's bytecode and closure variables, independent of file location."""
     if func is None:
         return xxh64("").hexdigest()
 
-    # Use module.qualname as a stable identifier across file locations
-    func_identifier = f"{func.__module__}.{func.__qualname__}"
-    return xxh64(func_identifier.encode("utf-8")).hexdigest()
+    # Create a BytesIO buffer for pickling
+    file = BytesIO()
+
+    # Create a custom pickler that standardizes file paths
+    class PathIndependentPickler(dill.Pickler):
+        def save_code(self, obj):
+            # Create a copy of the code object with a standardized filename
+            code = types.CodeType(
+                obj.co_argcount,
+                obj.co_posonlyargcount,
+                obj.co_kwonlyargcount,
+                obj.co_nlocals,
+                obj.co_stacksize,
+                obj.co_flags,
+                obj.co_code,
+                obj.co_consts,
+                obj.co_names,
+                obj.co_varnames,
+                "<standardized>",  # co_filename
+                obj.co_name,
+                obj.co_firstlineno,
+                obj.co_lnotab,
+                obj.co_freevars,
+                obj.co_cellvars
+            )
+            # Pickle the standardized code object
+            super().save_code(code)
+
+    # Use our custom pickler with recursion enabled to capture closure variables
+    pickler = PathIndependentPickler(file, recurse=True)
+    pickler.dump(func)
+
+    # Generate hash from the pickled function
+    return xxh64(file.getvalue()).hexdigest()
 
 
 def _get_function_source(func) -> str:
