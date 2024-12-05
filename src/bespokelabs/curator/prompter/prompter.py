@@ -288,9 +288,9 @@ class Prompter:
 
 
 class PathIndependentPickler(dill.Pickler):
-    """A custom pickler that standardizes file paths in code objects."""
+    """A custom pickler that standardizes file paths and line numbers in code objects."""
     def save_code(self, obj):
-        # Create a copy of the code object with a standardized filename
+        # Create a copy of the code object with standardized filename and line numbers
         code = types.CodeType(
             obj.co_argcount,
             obj.co_posonlyargcount,
@@ -304,8 +304,8 @@ class PathIndependentPickler(dill.Pickler):
             obj.co_varnames,
             "<standardized>",  # co_filename
             obj.co_name,
-            obj.co_firstlineno,
-            obj.co_lnotab,
+            1,  # co_firstlineno - standardized to 1
+            bytes([]),  # co_lnotab - empty as we standardize line numbers
             obj.co_freevars,
             obj.co_cellvars
         )
