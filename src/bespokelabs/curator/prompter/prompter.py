@@ -287,13 +287,13 @@ class Prompter:
 
 
 def _get_function_hash(func) -> str:
-    """Get a hash of a function's source code."""
+    """Get a hash of a function's identifier (module.qualname)."""
     if func is None:
         return xxh64("").hexdigest()
 
-    file = BytesIO()
-    dill.Pickler(file, recurse=True).dump(func)
-    return xxh64(file.getvalue()).hexdigest()
+    # Use module.qualname as a stable identifier across file locations
+    func_identifier = f"{func.__module__}.{func.__qualname__}"
+    return xxh64(func_identifier.encode("utf-8")).hexdigest()
 
 
 def _get_function_source(func) -> str:
