@@ -308,7 +308,12 @@ class BaseRequestProcessor(ABC):
             logger.info(f"Read {total_responses_count} responses, {failed_responses_count} failed")
             if failed_responses_count == total_responses_count:
                 os.remove(dataset_file)
-                raise ValueError("All requests failed")
+                error_msg = (
+                    "All API requests failed. This usually indicates an issue with model access permissions. "
+                    "Please check the logs above for specific error messages and verify your API key has "
+                    "access to the requested model."
+                )
+                raise ValueError(error_msg)
 
             logger.info("Finalizing writer")
 
