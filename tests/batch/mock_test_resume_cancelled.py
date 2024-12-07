@@ -14,7 +14,7 @@ USAGE:
 pytest -s tests/batch/mock_test_resume_cancelled.py
 """
 
-
+# https://platform.openai.com/docs/api-reference/batch/create
 def create_mock_batch(
     batch_id: str,
     request_file_name: str,
@@ -26,8 +26,8 @@ def create_mock_batch(
         id=batch_id,
         created_at=1234567890,
         error_file_id=None,
-        errors=Errors(data=[]),
-        expires_at=1234567890 + 86400,
+        errors=None,
+        expires_at=None,
         failed_at=None,
         input_file_id="file-123",
         output_file_id="file-456" if status == "completed" else None,
@@ -38,6 +38,15 @@ def create_mock_batch(
             total=total_requests,
         ),
         metadata={"request_file_name": request_file_name},
+        completion_window="24h",
+        endpoint="/v1/chat/completions",
+        object="batch",
+        in_progress_at=None,
+        finalizing_at=None,
+        completed_at=None,
+        expired_at=None,
+        cancelling_at=None,
+        cancelled_at=None,
     )
 
 
