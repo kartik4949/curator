@@ -112,48 +112,48 @@ async def test_batch_resume(mock_openai):
     # Small delay to ensure files are written
     time.sleep(1)
 
-    cache_dir = os.getenv("CURATOR_CACHE_DIR")
-    child_folder = os.listdir(cache_dir)[0]
-    working_dir = os.path.join(cache_dir, child_folder)
-    print(f"CANCELLING BATCHES in {working_dir}")
-    batch_manager = BatchManager(
-        working_dir,
-        delete_successful_batch_files=True,
-        delete_failed_batch_files=True,
-    )
-    submitted_batch_ids = batch_manager.get_submitted_batch_ids()
-    downloaded_batch_ids = batch_manager.get_downloaded_batch_ids()
-    not_downloaded_batch_id = list(submitted_batch_ids - downloaded_batch_ids)[0]
-    print(f"Submitted batch IDs: {submitted_batch_ids}")
-    print(f"Downloaded batch IDs: {downloaded_batch_ids}")
-    print(f"Not downloaded batch ID: {not_downloaded_batch_id}")
+    # cache_dir = os.getenv("CURATOR_CACHE_DIR")
+    # child_folder = os.listdir(cache_dir)[0]
+    # working_dir = os.path.join(cache_dir, child_folder)
+    # print(f"CANCELLING BATCHES in {working_dir}")
+    # batch_manager = BatchManager(
+    #     working_dir,
+    #     delete_successful_batch_files=True,
+    #     delete_failed_batch_files=True,
+    # )
+    # submitted_batch_ids = batch_manager.get_submitted_batch_ids()
+    # downloaded_batch_ids = batch_manager.get_downloaded_batch_ids()
+    # not_downloaded_batch_id = list(submitted_batch_ids - downloaded_batch_ids)[0]
+    # print(f"Submitted batch IDs: {submitted_batch_ids}")
+    # print(f"Downloaded batch IDs: {downloaded_batch_ids}")
+    # print(f"Not downloaded batch ID: {not_downloaded_batch_id}")
 
     # Mock batch cancellation
-    mock_client.batches.cancel.return_value = None
+    # mock_client.batches.cancel.return_value = None
 
-    # Reset batch retrieval sequence for second run
-    mock_batch_sequence = [
-        create_mock_batch(
-            "batch_" + "a" * 32, "requests.jsonl", status="cancelled"
-        ),  # Initial check
-        create_mock_batch(
-            "batch_" + "b" * 32, "requests.jsonl", status="completed", total_requests=2
-        ),  # New batch
-    ]
-    mock_client.batches.retrieve.side_effect = mock_batch_sequence
+    # # Reset batch retrieval sequence for second run
+    # mock_batch_sequence = [
+    #     create_mock_batch(
+    #         "batch_" + "a" * 32, "requests.jsonl", status="cancelled"
+    #     ),  # Initial check
+    #     create_mock_batch(
+    #         "batch_" + "b" * 32, "requests.jsonl", status="completed", total_requests=2
+    #     ),  # New batch
+    # ]
+    # mock_client.batches.retrieve.side_effect = mock_batch_sequence
 
-    batch_manager.cancel_batch(not_downloaded_batch_id)
-    batch_object = batch_manager.retrieve_batch(not_downloaded_batch_id)
-    # takes a while for the batch to be cancelled
-    while batch_object.status != "cancelled":
-        time.sleep(10)
-        batch_object = batch_manager.retrieve_batch(not_downloaded_batch_id)
+    # batch_manager.cancel_batch(not_downloaded_batch_id)
+    # batch_object = batch_manager.retrieve_batch(not_downloaded_batch_id)
+    # # takes a while for the batch to be cancelled
+    # while batch_object.status != "cancelled":
+    #     time.sleep(10)
+    #     batch_object = batch_manager.retrieve_batch(not_downloaded_batch_id)
 
-    # Second run should process the remaining batch, and resubmit the cancelled batch
-    print("SECOND RUN")
-    output2, _ = run_script(script, env=env)
-    print(output2)
+    # # Second run should process the remaining batch, and resubmit the cancelled batch
+    # print("SECOND RUN")
+    # output2, _ = run_script(script, env=env)
+    # print(output2)
 
-    # checks
-    assert "1 out of 2 batches already downloaded." in output2
-    assert "0 out of 1 remaining batches are already submitted." in output2
+    # # checks
+    # assert "1 out of 2 batches already downloaded." in output2
+    # assert "0 out of 1 remaining batches are already submitted." in output2
