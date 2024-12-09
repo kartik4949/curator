@@ -293,24 +293,28 @@ class PathIndependentPickler(dill.Pickler):
 
     def __init__(self, file, **kwargs):
         super().__init__(file, **kwargs)
-        # Add custom reducers to the dispatch dictionary
-        self.dispatch[types.FunctionType] = self._save_function
-        self.dispatch[types.CodeType] = self._save_code
+        # We don't modify the dispatch table anymore
+        # Instead we override the save method for our specific use case
 
-    def _save_code(self, obj):
+    def save(self, obj):
+        """Override save to handle our specific standardization cases."""
+        if isinstance(obj, types.CodeType):
+            self._save_standardized_code(obj)
+        elif isinstance(obj, types.FunctionType):
+            self._save_standardized_function(obj)
+        else:
+            super().save(obj)
+
+    def _save_standardized_code(self, obj):
         """Create a standardized copy of the code object."""
-        # Create a copy of the code object with standardized filename and line number
         # Standardize constants by converting tuples to lists and sorting where possible
         standardized_consts = []
         for const in obj.co_consts:
             if isinstance(const, (tuple, list, set, frozenset)):
                 standardized_consts.append(tuple(sorted(const)))
             elif isinstance(const, types.CodeType):
-                # Recursively standardize nested code objects
-                file = BytesIO()
-                pickler = PathIndependentPickler(file, recurse=True)
-                pickler.dump(const)
-                standardized_consts.append(file.getvalue())
+                # For nested code objects, use dill's normal pickling
+                standardized_consts.append(const)
             else:
                 standardized_consts.append(const)
 
@@ -333,10 +337,10 @@ class PathIndependentPickler(dill.Pickler):
             tuple(sorted(obj.co_cellvars)),
         )
 
-        # Use dill's save method to handle the code object
+        # Use dill's normal save_code
         dill._dill._save_code(self, standardized_code)
 
-    def _save_function(self, obj):
+    def _save_standardized_function(self, obj):
         """Create a standardized copy of the function."""
         # Create minimal globals dictionary
         new_globals = {
@@ -356,7 +360,7 @@ class PathIndependentPickler(dill.Pickler):
         new_func.__module__ = "<standardized>"
         new_func.__qualname__ = new_func.__name__
 
-        # Use dill's save method to handle the function
+        # Use dill's normal save_function
         dill._dill._save_function(self, new_func)
 
 
