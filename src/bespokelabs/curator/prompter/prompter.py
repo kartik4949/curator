@@ -293,6 +293,37 @@ class PathIndependentPickler(dill.Pickler):
 
     def __init__(self, file, **kwargs):
         super().__init__(file, **kwargs)
+        self._standardized_globals = {}
+
+    def save_function(self, obj):
+        """Override save_function to standardize module-level attributes."""
+        # Create standardized globals with only necessary items
+        new_globals = {
+            "__builtins__": obj.__globals__["__builtins__"],
+            "__name__": "standardized_module",
+            "__package__": None,
+        }
+
+        # Add referenced globals and closure variables
+        referenced_names = set(obj.__code__.co_names)
+        if obj.__closure__:
+            referenced_names.update(obj.__code__.co_freevars)
+
+        for name in referenced_names:
+            if name in obj.__globals__:
+                # Store the value in our standardized globals if we haven't seen it before
+                if name not in self._standardized_globals:
+                    self._standardized_globals[name] = obj.__globals__[name]
+                new_globals[name] = self._standardized_globals[name]
+
+        # Create new function with standardized attributes
+        new_func = types.FunctionType(
+            obj.__code__, new_globals, "standardized_function", obj.__defaults__, obj.__closure__
+        )
+        new_func.__module__ = "standardized_module"
+        new_func.__qualname__ = new_func.__name__
+
+        super().save(new_func)
 
     def save_code(self, obj):
         """Override save_code to standardize code objects."""
@@ -302,37 +333,20 @@ class PathIndependentPickler(dill.Pickler):
             obj.co_kwonlyargcount,
             obj.co_nlocals,
             obj.co_stacksize,
-            obj.co_flags,  # Keep flags as-is
-            obj.co_code,  # Keep raw bytecode
-            tuple(sorted(obj.co_consts) if isinstance(obj.co_consts, (set, frozenset)) else obj.co_consts),
+            obj.co_flags,
+            obj.co_code,
+            tuple(
+                sorted(obj.co_consts)
+                if isinstance(obj.co_consts, (set, frozenset))
+                else obj.co_consts
+            ),
             tuple(sorted(obj.co_names)),
             tuple(sorted(obj.co_varnames)),
-            "standardized",  # Use a simple string instead of path-like
+            "standardized",
             obj.co_name,
-            1,  # Standardize line number
+            1,
             obj.co_lnotab,
             tuple(sorted(obj.co_freevars)),
-            tuple(sorted(obj.co_cellvars))
+            tuple(sorted(obj.co_cellvars)),
         )
         super().save(standardized_code)
-
-
-def _get_function_source(func) -> str:
-    """Get the source code of a function."""
-    if func is None:
-        return ""
-    try:
-        return inspect.getsource(func)
-    except (TypeError, OSError):
-        return ""
-
-
-def _get_function_hash(func) -> str:
-    """Get a consistent hash of a function's essential components."""
-    if func is None:
-        return xxh64("").hexdigest()
-
-    file = BytesIO()
-    pickler = PathIndependentPickler(file, recurse=True)
-    pickler.dump(func)
-    return xxh64(file.getvalue()).hexdigest()
