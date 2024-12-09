@@ -293,9 +293,9 @@ class PathIndependentPickler(dill.Pickler):
 
     def __init__(self, file, **kwargs):
         super().__init__(file, **kwargs)
-        # Add custom reducers to the dispatch table
-        self.dispatch_table[types.FunctionType] = self._reduce_function
-        self.dispatch_table[types.CodeType] = self._reduce_code
+        # Add custom reducers to the dispatch dictionary
+        self.dispatch[types.FunctionType] = self._reduce_function
+        self.dispatch[types.CodeType] = self._reduce_code
 
     def _reduce_code(self, obj):
         """Create a standardized copy of the code object."""
