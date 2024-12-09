@@ -125,8 +125,8 @@ def test_function_hash_file_independence():
     import tempfile
     import os
 
-    # Set up logging to write to a file
-    debug_log = Path(tempfile.gettempdir()) / "function_debug.log"
+    # Set up logging to write to a file in the current directory
+    debug_log = Path("function_debug.log")
     logging.basicConfig(
         level=logging.DEBUG,
         format='%(message)s',
@@ -137,31 +137,34 @@ def test_function_hash_file_independence():
 
     def dump_function_details(func, prefix):
         """Helper to dump all function details."""
+        print(f"\n{prefix} details:")  # Print to stdout as well
         logger.debug(f"\n{prefix} details:")
         # Basic attributes
-        logger.debug(f"  __name__: {func.__name__}")
-        logger.debug(f"  __module__: {func.__module__}")
-        logger.debug(f"  __qualname__: {func.__qualname__}")
+        details = {
+            "__name__": func.__name__,
+            "__module__": func.__module__,
+            "__qualname__": func.__qualname__,
+            "__code__.co_filename": func.__code__.co_filename,
+            "__code__.co_name": func.__code__.co_name,
+            "__code__.co_firstlineno": func.__code__.co_firstlineno,
+            "__code__.co_consts": func.__code__.co_consts,
+            "__code__.co_names": func.__code__.co_names,
+            "__code__.co_varnames": func.__code__.co_varnames,
+            "__code__.co_code": func.__code__.co_code.hex(),
+            "__code__.co_flags": func.__code__.co_flags,
+            "__code__.co_stacksize": func.__code__.co_stacksize,
+            "__code__.co_freevars": func.__code__.co_freevars,
+            "__code__.co_cellvars": func.__code__.co_cellvars,
+            "__globals__ keys": sorted(func.__globals__.keys()),
+            "__closure__": func.__closure__,
+            "__defaults__": func.__defaults__,
+            "__kwdefaults__": func.__kwdefaults__
+        }
 
-        # Code object details
-        code = func.__code__
-        logger.debug(f"  __code__.co_filename: {code.co_filename}")
-        logger.debug(f"  __code__.co_name: {code.co_name}")
-        logger.debug(f"  __code__.co_firstlineno: {code.co_firstlineno}")
-        logger.debug(f"  __code__.co_consts: {code.co_consts}")
-        logger.debug(f"  __code__.co_names: {code.co_names}")
-        logger.debug(f"  __code__.co_varnames: {code.co_varnames}")
-        logger.debug(f"  __code__.co_code: {code.co_code.hex()}")
-        logger.debug(f"  __code__.co_flags: {code.co_flags}")
-        logger.debug(f"  __code__.co_stacksize: {code.co_stacksize}")
-        logger.debug(f"  __code__.co_freevars: {code.co_freevars}")
-        logger.debug(f"  __code__.co_cellvars: {code.co_cellvars}")
-
-        # Function context
-        logger.debug(f"  __globals__ keys: {sorted(func.__globals__.keys())}")
-        logger.debug(f"  __closure__: {func.__closure__}")
-        logger.debug(f"  __defaults__: {func.__defaults__}")
-        logger.debug(f"  __kwdefaults__: {func.__kwdefaults__}")
+        for key, value in details.items():
+            msg = f"  {key}: {value}"
+            print(msg)  # Print to stdout
+            logger.debug(msg)  # Log to file
 
     def create_function(name, tmp_path):
         # Create a temporary file with a function definition
@@ -194,17 +197,12 @@ def test_func():
         # Both should produce the same hash
         hash1 = _get_function_hash(func1)
         hash2 = _get_function_hash(func2)
+        print(f"\nHash comparison:")  # Print to stdout
+        print(f"  hash1: {hash1}")
+        print(f"  hash2: {hash2}")
         logger.debug(f"\nHash comparison:")
         logger.debug(f"  hash1: {hash1}")
         logger.debug(f"  hash2: {hash2}")
-
-        # Print the location of the debug log
-        print(f"\nDebug log written to: {debug_log}")
-
-        # Read and print the debug log
-        with open(debug_log, 'r') as f:
-            print("\nDebug log contents:")
-            print(f.read())
 
         assert hash1 == hash2, "Identical functions should produce the same hash"
 
