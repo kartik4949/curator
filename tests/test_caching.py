@@ -128,10 +128,7 @@ def test_function_hash_file_independence():
     # Set up logging to write to a file in the current directory
     debug_log = Path("function_debug.log")
     logging.basicConfig(
-        level=logging.DEBUG,
-        format='%(message)s',
-        filename=str(debug_log),
-        filemode='w'
+        level=logging.DEBUG, format="%(message)s", filename=str(debug_log), filemode="w"
     )
     logger = logging.getLogger(__name__)
 
@@ -158,7 +155,7 @@ def test_function_hash_file_independence():
             "__globals__ keys": sorted(func.__globals__.keys()),
             "__closure__": func.__closure__,
             "__defaults__": func.__defaults__,
-            "__kwdefaults__": func.__kwdefaults__
+            "__kwdefaults__": func.__kwdefaults__,
         }
 
         for key, value in details.items():
@@ -170,16 +167,19 @@ def test_function_hash_file_independence():
         # Create a temporary file with a function definition
         path = tmp_path / f"{name}.py"
         with open(path, "w") as f:
-            f.write("""
+            f.write(
+                """
 def test_func():
     x = 42  # Add a constant
     y = "Hello"  # Add a string constant
     z = [1, 2, 3]  # Add a list constant
     return f"{y}, {x}! {z}"  # Use all constants
-""")
+"""
+            )
 
         # Import the function from the file
         import importlib.util
+
         spec = importlib.util.spec_from_file_location(name, path)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
@@ -219,10 +219,7 @@ def test_function_hash_closure_handling():
     # Set up logging
     debug_log = Path("closure_debug.log")
     logging.basicConfig(
-        level=logging.DEBUG,
-        format='%(message)s',
-        filename=str(debug_log),
-        filemode='w'
+        level=logging.DEBUG, format="%(message)s", filename=str(debug_log), filemode="w"
     )
     logger = logging.getLogger(__name__)
 
@@ -242,10 +239,12 @@ def test_function_hash_closure_handling():
             "__qualname__": func.__qualname__,
             "__code__.co_filename": func.__code__.co_filename,
             "__code__.co_freevars": func.__code__.co_freevars,
-            "__closure__": [cell.cell_contents for cell in func.__closure__] if func.__closure__ else None,
+            "__closure__": (
+                [cell.cell_contents for cell in func.__closure__] if func.__closure__ else None
+            ),
             "__globals__ keys": sorted(func.__globals__.keys()),
             "pickled_length": len(pickled),
-            "pickled_start": pickled[:20].hex()  # First 20 bytes for comparison
+            "pickled_start": pickled[:20].hex(),  # First 20 bytes for comparison
         }
 
         for key, value in details.items():
@@ -257,8 +256,10 @@ def test_function_hash_closure_handling():
     def create_func(x_val="outer", y_val="inner"):
         x = x_val
         y = y_val
+
         def func():
             return f"{x} {y}"
+
         return func
 
     func1 = create_func()
@@ -285,13 +286,15 @@ def test_function_hash_closure_handling():
     def create_module_func(name, tmp_path, x_val="outer", y_val="inner"):
         path = tmp_path / f"{name}.py"
         with open(path, "w") as f:
-            f.write(f"""
+            f.write(
+                f"""
 x = "{x_val}"
 y = "{y_val}"
 
 def func():
     return f"{{x}} {{y}}"
-""")
+"""
+            )
 
         spec = importlib.util.spec_from_file_location(name, path)
         module = importlib.util.module_from_spec(spec)
@@ -310,4 +313,6 @@ def func():
         # Test identical functions in different modules
         mod_hash1 = _get_function_hash(mod_func1)
         mod_hash2 = _get_function_hash(mod_func2)
-        assert mod_hash1 == mod_hash2, "Identical functions in different modules should produce same hash"
+        assert (
+            mod_hash1 == mod_hash2
+        ), "Identical functions in different modules should produce same hash"

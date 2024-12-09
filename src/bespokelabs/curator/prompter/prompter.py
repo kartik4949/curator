@@ -292,6 +292,7 @@ class PathIndependentPickler(dill.Pickler):
 
     def save_code(self, obj):
         import sys
+
         sys.stderr.write("\nPickling code object:\n")
         sys.stderr.write(f"  co_name: {obj.co_name}\n")
         sys.stderr.write(f"  co_filename: {obj.co_filename}\n")
@@ -327,6 +328,7 @@ class PathIndependentPickler(dill.Pickler):
 
     def save_function(self, obj):
         import sys
+
         sys.stderr.write("\nPickling function:\n")
         sys.stderr.write(f"  __name__: {obj.__name__}\n")
         sys.stderr.write(f"  __module__: {obj.__module__}\n")
@@ -380,7 +382,10 @@ class PathIndependentPickler(dill.Pickler):
                 obj.__name__,  # Use __name__ for consistency
                 1,  # co_firstlineno
                 bytes([]),  # co_lnotab
-                obj.__code__.co_freevars + tuple(name for name in required_names if name not in obj.__code__.co_freevars),  # Add module variables as freevars
+                obj.__code__.co_freevars
+                + tuple(
+                    name for name in required_names if name not in obj.__code__.co_freevars
+                ),  # Add module variables as freevars
                 obj.__code__.co_cellvars,
             )
 
