@@ -1,6 +1,7 @@
 """Curator: Bespoke Labs Synthetic Data Generation Library."""
 
 import inspect
+import json
 import logging
 import os
 from datetime import datetime
@@ -287,7 +288,7 @@ class Prompter:
         return dataset
 
 
-import json
+{ unchanged code description: class PathIndependentPickler docstring and class definition }
 
 class PathIndependentPickler:
     """A custom serializer that ensures consistent function serialization."""
