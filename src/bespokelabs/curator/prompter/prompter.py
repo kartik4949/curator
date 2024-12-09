@@ -293,45 +293,50 @@ class PathIndependentPickler(dill.Pickler):
 
     def __init__(self, file, **kwargs):
         super().__init__(file, **kwargs)
-        self._standardized_globals = {}
 
     def save_function(self, obj):
         """Override save_function to standardize module-level attributes."""
-        # Create standardized globals with only necessary items
-        new_globals = {
-            "__builtins__": obj.__globals__["__builtins__"],
-            "__name__": "standardized_module",
-            "__package__": None,
-        }
+        # Create minimal globals with only builtins
+        new_globals = {"__builtins__": obj.__globals__["__builtins__"]}
 
-        # Add referenced globals and closure variables
-        referenced_names = set(obj.__code__.co_names)
-        if obj.__closure__:
-            referenced_names.update(obj.__code__.co_freevars)
+        # Create standardized code object
+        standardized_code = types.CodeType(
+            obj.__code__.co_argcount,
+            obj.__code__.co_posonlyargcount,
+            obj.__code__.co_kwonlyargcount,
+            obj.__code__.co_nlocals,
+            obj.__code__.co_stacksize,
+            obj.__code__.co_flags & ~0b111111111111111,  # Clear position-dependent flags
+            obj.__code__.co_code,
+            tuple(sorted(obj.__code__.co_consts) if isinstance(obj.__code__.co_consts, (tuple, set, frozenset)) else obj.__code__.co_consts),
+            tuple(sorted(obj.__code__.co_names)),
+            tuple(sorted(obj.__code__.co_varnames)),
+            "standardized",  # Standardize filename
+            "standardized_function",  # Standardize function name
+            1,  # Standardize first line number
+            obj.__code__.co_lnotab,
+            tuple(sorted(obj.__code__.co_freevars)),
+            tuple(sorted(obj.__code__.co_cellvars))
+        )
 
-        for name in referenced_names:
-            if name in obj.__globals__:
-                # Store the value in our standardized globals if we haven't seen it before
-                if name not in self._standardized_globals:
-                    self._standardized_globals[name] = obj.__globals__[name]
-                new_globals[name] = self._standardized_globals[name]
-
-        # Create new function with standardized attributes
+        # Create new function with minimal context
         new_func = types.FunctionType(
-            self.save_code(obj.__code__),  # Use our standardized code object
+            standardized_code,
             new_globals,
             "standardized_function",
             obj.__defaults__,
-            obj.__closure__,
+            obj.__closure__  # Keep original closure to maintain behavior
         )
-        new_func.__module__ = "standardized_module"
-        new_func.__qualname__ = new_func.__name__
 
+        # Standardize function attributes
+        new_func.__module__ = "standardized_module"
+        new_func.__qualname__ = "standardized_function"
+
+        # Save the standardized function
         super().save(new_func)
 
     def save_code(self, obj):
         """Override save_code to standardize code objects."""
-        # Create a standardized code object with sorted attributes
         standardized_code = types.CodeType(
             obj.co_argcount,
             obj.co_posonlyargcount,
@@ -348,9 +353,9 @@ class PathIndependentPickler(dill.Pickler):
             1,  # Standardize first line number
             obj.co_lnotab,
             tuple(sorted(obj.co_freevars)),
-            tuple(sorted(obj.co_cellvars)),
+            tuple(sorted(obj.co_cellvars))
         )
-        return standardized_code
+        super().save(standardized_code)
 
 
 def _get_function_source(func: Callable) -> str:
