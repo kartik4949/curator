@@ -298,7 +298,7 @@ class PathIndependentPickler(dill.Pickler):
         self.dispatch[types.CodeType] = self.save_code
 
     def save_code(self, obj):
-        """Override save_code to standardize the file path and line numbers."""
+        """Create a standardized copy of the code object."""
         # Create a copy of the code object with standardized filename and line number
         # Standardize constants by converting tuples to lists and sorting where possible
         standardized_consts = []
@@ -334,31 +334,10 @@ class PathIndependentPickler(dill.Pickler):
         )
 
         # Use dill's save_reduce to properly handle the code object
-        self.save_reduce(
-            types.CodeType,
-            (
-                code.co_argcount,
-                code.co_posonlyargcount,
-                code.co_kwonlyargcount,
-                code.co_nlocals,
-                code.co_stacksize,
-                code.co_flags,
-                code.co_code,
-                tuple(standardized_consts),
-                tuple(sorted(code.co_names)),
-                tuple(sorted(code.co_varnames)),
-                "<standardized>",
-                code.co_name,
-                1,
-                code.co_lnotab,
-                tuple(sorted(code.co_freevars)),
-                tuple(sorted(code.co_cellvars)),
-            ),
-            obj=obj,
-        )
+        dill._dill._save_code(self, code)
 
     def save_function(self, obj):
-        """Override save_function to standardize function attributes."""
+        """Create a standardized copy of the function."""
         # Create minimal globals dictionary
         new_globals = {
             "__builtins__": obj.__globals__["__builtins__"],
