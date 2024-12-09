@@ -338,21 +338,45 @@ class PathIndependentPickler(dill.Pickler):
         orig_module = getattr(obj, "__module__", None)
         orig_qualname = getattr(obj, "__qualname__", None)
         orig_globals = getattr(obj, "__globals__", {})
-
-        # Standardize module and qualname
-        obj.__module__ = "<standardized>"
-        obj.__qualname__ = obj.__name__
-
-        # Filter globals to only include what's needed
-        filtered_globals = {}
-        if obj.__closure__:
-            for name in obj.__code__.co_freevars:
-                if name in orig_globals:
-                    filtered_globals[name] = orig_globals[name]
-        obj.__globals__ = filtered_globals
+        orig_closure = getattr(obj, "__closure__", None)
+        orig_code = obj.__code__
 
         try:
-            # Pickle the function with standardized attributes
+            # Create a filtered copy of globals that only includes necessary items
+            filtered_globals = {}
+            if obj.__closure__:
+                # Include only the globals needed for closure variables
+                for name in obj.__code__.co_freevars:
+                    if name in orig_globals:
+                        filtered_globals[name] = orig_globals[name]
+
+            # Standardize function attributes
+            obj.__module__ = "<standardized>"
+            obj.__qualname__ = f"<standardized>.{obj.__name__}"
+            obj.__globals__ = filtered_globals
+
+            # Create a standardized code object
+            code = types.CodeType(
+                obj.__code__.co_argcount,
+                obj.__code__.co_posonlyargcount,
+                obj.__code__.co_kwonlyargcount,
+                obj.__code__.co_nlocals,
+                obj.__code__.co_stacksize,
+                obj.__code__.co_flags,
+                obj.__code__.co_code,
+                obj.__code__.co_consts,
+                obj.__code__.co_names,
+                obj.__code__.co_varnames,
+                "<standardized>",  # co_filename
+                obj.__name__,  # Use __name__ instead of co_name for consistency
+                1,  # co_firstlineno
+                bytes([]),  # co_lnotab
+                obj.__code__.co_freevars,
+                obj.__code__.co_cellvars,
+            )
+            obj.__code__ = code
+
+            # Pickle the standardized function
             super().save_function(obj)
         finally:
             # Restore original attributes
@@ -361,6 +385,7 @@ class PathIndependentPickler(dill.Pickler):
             if orig_qualname is not None:
                 obj.__qualname__ = orig_qualname
             obj.__globals__ = orig_globals
+            obj.__code__ = orig_code  # Restore original code object
 
 
 def _get_function_hash(func) -> str:

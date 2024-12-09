@@ -210,31 +210,104 @@ def test_func():
 def test_function_hash_closure_handling():
     """Test that functions with closure variables are handled correctly."""
     from bespokelabs.curator.prompter.prompter import _get_function_hash
+    import logging
+    from pathlib import Path
+    import types
+    import dill
+    from io import BytesIO
 
-    def create_function():
-        outer_value = "outer"
-        inner_value = "inner"
+    # Set up logging
+    debug_log = Path("closure_debug.log")
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format='%(message)s',
+        filename=str(debug_log),
+        filemode='w'
+    )
+    logger = logging.getLogger(__name__)
+
+    def dump_pickle_details(func, prefix):
+        """Helper to dump pickle details."""
+        print(f"\n{prefix} pickle details:")
+        logger.debug(f"\n{prefix} pickle details:")
+
+        # Get pickled data
+        file = BytesIO()
+        dill.dump(func, file)
+        pickled = file.getvalue()
+
+        details = {
+            "__name__": func.__name__,
+            "__module__": func.__module__,
+            "__qualname__": func.__qualname__,
+            "__code__.co_filename": func.__code__.co_filename,
+            "__code__.co_freevars": func.__code__.co_freevars,
+            "__closure__": [cell.cell_contents for cell in func.__closure__] if func.__closure__ else None,
+            "__globals__ keys": sorted(func.__globals__.keys()),
+            "pickled_length": len(pickled),
+            "pickled_start": pickled[:20].hex()  # First 20 bytes for comparison
+        }
+
+        for key, value in details.items():
+            msg = f"  {key}: {value}"
+            print(msg)
+            logger.debug(msg)
+
+    # Test 1: Same module, different closures
+    def create_func(x_val="outer", y_val="inner"):
+        x = x_val
+        y = y_val
         def func():
-            return f"{outer_value} {inner_value}"
+            return f"{x} {y}"
         return func
 
-    # Create two instances of the same function with closures
-    func1 = create_function()
-    func2 = create_function()
+    func1 = create_func()
+    func2 = create_func()
+    func3 = create_func("different", "values")
 
-    # Both should produce the same hash
+    # Dump details for debugging
+    dump_pickle_details(func1, "Function 1 (same module)")
+    dump_pickle_details(func2, "Function 2 (same module)")
+
+    # Test identical functions in same module
     hash1 = _get_function_hash(func1)
     hash2 = _get_function_hash(func2)
-    assert hash1 == hash2, "Identical functions with closures should produce the same hash"
+    assert hash1 == hash2, "Identical functions in same module should produce same hash"
 
-    # Verify that different closure values produce different hashes
-    def create_function_different_closure():
-        outer_value = "different"
-        inner_value = "values"
-        def func():
-            return f"{outer_value} {inner_value}"
-        return func
-
-    func3 = create_function_different_closure()
+    # Test different closure values
     hash3 = _get_function_hash(func3)
     assert hash1 != hash3, "Functions with different closure values should produce different hashes"
+
+    # Test 2: Different modules
+    import tempfile
+    import importlib.util
+
+    def create_module_func(name, tmp_path, x_val="outer", y_val="inner"):
+        path = tmp_path / f"{name}.py"
+        with open(path, "w") as f:
+            f.write(f"""
+x = "{x_val}"
+y = "{y_val}"
+
+def func():
+    return f"{{x}} {{y}}"
+""")
+
+        spec = importlib.util.spec_from_file_location(name, path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module.func
+
+    # Create functions in different modules
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        mod_func1 = create_module_func("module1", Path(tmp_dir))
+        mod_func2 = create_module_func("module2", Path(tmp_dir))
+
+        # Dump details for debugging
+        dump_pickle_details(mod_func1, "Function 1 (different module)")
+        dump_pickle_details(mod_func2, "Function 2 (different module)")
+
+        # Test identical functions in different modules
+        mod_hash1 = _get_function_hash(mod_func1)
+        mod_hash2 = _get_function_hash(mod_func2)
+        assert mod_hash1 == mod_hash2, "Identical functions in different modules should produce same hash"
