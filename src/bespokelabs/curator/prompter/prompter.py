@@ -293,8 +293,6 @@ class PathIndependentPickler(dill.Pickler):
 
     def __init__(self, file, **kwargs):
         super().__init__(file, **kwargs)
-        # We don't modify the dispatch table anymore
-        # Instead we override the save method for our specific use case
 
     def save(self, obj):
         """Override save to handle our specific standardization cases."""
@@ -307,17 +305,7 @@ class PathIndependentPickler(dill.Pickler):
 
     def _save_standardized_code(self, obj):
         """Create a standardized copy of the code object."""
-        # Standardize constants by converting tuples to lists and sorting where possible
-        standardized_consts = []
-        for const in obj.co_consts:
-            if isinstance(const, (tuple, list, set, frozenset)):
-                standardized_consts.append(tuple(sorted(const)))
-            elif isinstance(const, types.CodeType):
-                # For nested code objects, use dill's normal pickling
-                standardized_consts.append(const)
-            else:
-                standardized_consts.append(const)
-
+        # Create a copy of the code object with standardized filename and line number
         standardized_code = types.CodeType(
             obj.co_argcount,
             obj.co_posonlyargcount,
@@ -326,7 +314,7 @@ class PathIndependentPickler(dill.Pickler):
             obj.co_stacksize,
             obj.co_flags,
             obj.co_code,
-            tuple(standardized_consts),
+            obj.co_consts,  # Keep original consts to preserve closure references
             tuple(sorted(obj.co_names)),
             tuple(sorted(obj.co_varnames)),
             "<standardized>",  # Standardize filename
@@ -336,32 +324,38 @@ class PathIndependentPickler(dill.Pickler):
             tuple(sorted(obj.co_freevars)),
             tuple(sorted(obj.co_cellvars)),
         )
-
-        # Use dill's normal save_code
-        dill._dill._save_code(self, standardized_code)
+        super().save(standardized_code)
 
     def _save_standardized_function(self, obj):
         """Create a standardized copy of the function."""
-        # Create minimal globals dictionary
-        new_globals = {
+        # Create minimal globals dictionary with only necessary items
+        new_globals = {}
+        if obj.__closure__:
+            # If the function has closures, we need to preserve the closure values
+            for name in obj.__code__.co_freevars:
+                if name in obj.__globals__:
+                    new_globals[name] = obj.__globals__[name]
+
+        # Add minimal required globals
+        new_globals.update({
             "__builtins__": obj.__globals__["__builtins__"],
             "__name__": "<standardized>",
             "__package__": None,
-        }
+        })
 
-        # Create new function with standardized attributes
+        # Create new function with standardized attributes but preserve closure
         new_func = types.FunctionType(
             obj.__code__,
             new_globals,
             "<standardized>",  # name
             obj.__defaults__,
-            obj.__closure__,
+            obj.__closure__,  # Preserve original closure
         )
         new_func.__module__ = "<standardized>"
         new_func.__qualname__ = new_func.__name__
 
-        # Use dill's normal save_function
-        dill._dill._save_function(self, new_func)
+        # Use super().save to avoid recursion
+        super().save(new_func)
 
 
 def _get_function_source(func) -> str:
