@@ -350,3 +350,26 @@ class PathIndependentPickler(dill.Pickler):
             tuple(sorted(obj.co_cellvars)),
         )
         super().save(standardized_code)
+
+
+def _get_function_source(func: Callable) -> str:
+    """Get the source code of a function."""
+    try:
+        return inspect.getsource(func)
+    except (TypeError, OSError):
+        return ""
+
+
+def _get_function_hash(func: Optional[Callable]) -> str:
+    """Get a consistent hash for a function across different files."""
+    if func is None:
+        return xxh64("").hexdigest()
+
+    # Serialize the function using our path-independent pickler
+    file = BytesIO()
+    pickler = PathIndependentPickler(file)
+    pickler.dump(func)
+    serialized = file.getvalue()
+
+    # Generate a hash of the serialized function
+    return xxh64(serialized).hexdigest()
