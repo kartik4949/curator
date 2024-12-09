@@ -313,24 +313,28 @@ class PathIndependentPickler(dill.Pickler):
             obj.co_cellvars,
         )
         # Use dill's save_reduce to properly handle the code object
-        self.save_reduce(types.CodeType, args=(
-            code.co_argcount,
-            code.co_posonlyargcount,
-            code.co_kwonlyargcount,
-            code.co_nlocals,
-            code.co_stacksize,
-            code.co_flags,
-            code.co_code,
-            code.co_consts,
-            code.co_names,
-            code.co_varnames,
-            "<standardized>",
-            code.co_name,
-            1,
-            code.co_lnotab,
-            code.co_freevars,
-            code.co_cellvars,
-        ), obj=obj)
+        self.save_reduce(
+            types.CodeType,
+            args=(
+                code.co_argcount,
+                code.co_posonlyargcount,
+                code.co_kwonlyargcount,
+                code.co_nlocals,
+                code.co_stacksize,
+                code.co_flags,
+                code.co_code,
+                code.co_consts,
+                code.co_names,
+                code.co_varnames,
+                "<standardized>",
+                code.co_name,
+                1,
+                code.co_lnotab,
+                code.co_freevars,
+                code.co_cellvars,
+            ),
+            obj=obj,
+        )
 
 
 def _get_function_source(func) -> str:
