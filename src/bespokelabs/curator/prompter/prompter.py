@@ -260,6 +260,7 @@ class Prompter:
         fingerprint = xxh64(fingerprint_str.encode("utf-8")).hexdigest()
         logger.info(f">>>>>> Curator Cache Fingerprint String: {fingerprint_str}")
         logger.info(f">>>>>> Curator Cache Fingerprint: {fingerprint}")
+        logger.info(f">>>>>> ONLY DRYRUNNING not running completions")
         # logger.debug(f"Curator Cache Fingerprint String: {fingerprint_str}")
         # logger.debug(f"Curator Cache Fingerprint: {fingerprint}")
 
