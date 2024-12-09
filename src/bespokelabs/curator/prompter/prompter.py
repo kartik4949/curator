@@ -326,7 +326,7 @@ class PathIndependentPickler(dill.Pickler):
             obj.co_linetable,  # Keep original line table
             obj.co_exceptiontable,  # Keep original exception table
             tuple(sorted(obj.co_freevars)),  # tuple of strings
-            tuple(sorted(obj.co_cellvars))  # tuple of strings
+            tuple(sorted(obj.co_cellvars)),  # tuple of strings
         )
         super().save(code)
 
@@ -366,7 +366,7 @@ def _get_function_hash(func: Optional[Callable]) -> str:
         func.__code__.co_linetable,  # bytes - Keep original line table
         func.__code__.co_exceptiontable,  # Keep original exception table
         tuple(sorted(func.__code__.co_freevars)),  # tuple of strings
-        tuple(sorted(func.__code__.co_cellvars))  # tuple of strings
+        tuple(sorted(func.__code__.co_cellvars)),  # tuple of strings
     )
 
     # Create minimal globals with only builtins
