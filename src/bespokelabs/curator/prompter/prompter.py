@@ -321,10 +321,12 @@ class PathIndependentPickler(dill.Pickler):
             tuple(sorted(obj.co_varnames)),
             "standardized",  # Standardize filename
             obj.co_name,  # Keep original name for better debugging
-            "1",  # Line number must be string
-            int.from_bytes(obj.co_linetable[:4], byteorder='little'),  # Use first 4 bytes only
-            tuple(sorted(obj.co_freevars)),
-            tuple(sorted(obj.co_cellvars)),
+            obj.co_name,  # Use name as qualname for consistency
+            1,  # Line number as integer
+            obj.co_linetable,  # Keep original line table
+            obj.co_exceptiontable,  # Keep original exception table
+            tuple(sorted(obj.co_freevars)),  # tuple of strings
+            tuple(sorted(obj.co_cellvars))  # tuple of strings
         )
         super().save(code)
 
@@ -344,25 +346,27 @@ def _get_function_hash(func: Optional[Callable]) -> str:
 
     # Create a standardized code object
     code = types.CodeType(
-        func.__code__.co_argcount,
-        func.__code__.co_posonlyargcount,
-        func.__code__.co_kwonlyargcount,
-        func.__code__.co_nlocals,
-        func.__code__.co_stacksize,
-        func.__code__.co_flags,  # Keep all flags to preserve function type
-        func.__code__.co_code,  # Keep as bytes
+        func.__code__.co_argcount,  # integer
+        func.__code__.co_posonlyargcount,  # integer
+        func.__code__.co_kwonlyargcount,  # integer
+        func.__code__.co_nlocals,  # integer
+        func.__code__.co_stacksize,  # integer
+        func.__code__.co_flags,  # integer - Keep all flags to preserve function type
+        func.__code__.co_code,  # bytes - Keep as bytes
         tuple(
             c if not isinstance(c, (tuple, list, set, frozenset)) else tuple(sorted(c))
             for c in func.__code__.co_consts
-        ),
-        tuple(sorted(func.__code__.co_names)),
-        tuple(sorted(func.__code__.co_varnames)),
-        "standardized",  # Standardize filename
-        func.__code__.co_name,  # Keep original name for better debugging
-        "1",  # Line number must be string
-        int.from_bytes(func.__code__.co_linetable[:4], byteorder='little'),  # Use first 4 bytes only
-        tuple(sorted(func.__code__.co_freevars)),
-        tuple(sorted(func.__code__.co_cellvars)),
+        ),  # tuple of constants
+        tuple(sorted(func.__code__.co_names)),  # tuple of strings
+        tuple(sorted(func.__code__.co_varnames)),  # tuple of strings
+        "standardized",  # string - Standardize filename
+        func.__code__.co_name,  # string - Keep original name for better debugging
+        func.__code__.co_name,  # Use name as qualname for consistency
+        1,  # integer - Line number
+        func.__code__.co_linetable,  # bytes - Keep original line table
+        func.__code__.co_exceptiontable,  # Keep original exception table
+        tuple(sorted(func.__code__.co_freevars)),  # tuple of strings
+        tuple(sorted(func.__code__.co_cellvars))  # tuple of strings
     )
 
     # Create minimal globals with only builtins
