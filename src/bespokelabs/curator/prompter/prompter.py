@@ -288,8 +288,6 @@ class Prompter:
         return dataset
 
 
-{ unchanged code description: class PathIndependentPickler docstring and class definition }
-
 class PathIndependentPickler:
     """A custom serializer that ensures consistent function serialization."""
 
@@ -303,8 +301,11 @@ class PathIndependentPickler:
         return {
             "bytecode": code.co_code.hex(),  # bytecode as hex string
             "constants": [
-                self._serialize_code(c) if isinstance(c, types.CodeType)
-                else (list(c) if isinstance(c, (tuple, set, frozenset)) else c)
+                (
+                    self._serialize_code(c)
+                    if isinstance(c, types.CodeType)
+                    else (list(c) if isinstance(c, (tuple, set, frozenset)) else c)
+                )
                 for c in code.co_consts
             ],
             "names": sorted(code.co_names),
@@ -316,7 +317,7 @@ class PathIndependentPickler:
             "kwonlyargcount": code.co_kwonlyargcount,
             "nlocals": code.co_nlocals,
             "stacksize": code.co_stacksize,
-            "flags": code.co_flags & ~0b111111111111111  # Clear position-dependent flags
+            "flags": code.co_flags & ~0b111111111111111,  # Clear position-dependent flags
         }
 
     def _serialize_value(self, value):
@@ -330,7 +331,7 @@ class PathIndependentPickler:
         elif isinstance(value, (list, tuple)):
             return {
                 "type": type(value).__name__,
-                "value": [self._serialize_value(v) for v in value]
+                "value": [self._serialize_value(v) for v in value],
             }
         elif isinstance(value, dict):
             return {
@@ -338,17 +339,13 @@ class PathIndependentPickler:
                 "value": {
                     str(k): self._serialize_value(v)
                     for k, v in sorted(value.items(), key=lambda x: str(x[0]))
-                }
+                },
             }
         elif isinstance(value, types.FunctionType):
             return {"type": "function", "value": self._serialize_function(value)}
         else:
             # For other types, preserve both type and string representation
-            return {
-                "type": type(value).__name__,
-                "repr": repr(value),
-                "str": str(value)
-            }
+            return {"type": type(value).__name__, "repr": repr(value), "str": str(value)}
 
     def _serialize_closure(self, closure, freevars):
         """Serialize closure cells with value preservation."""
@@ -364,7 +361,7 @@ class PathIndependentPickler:
         # Return a sorted list of (name, value) pairs for consistent ordering
         return sorted(
             [{"name": name, "value": value} for name, value in closure_dict.items()],
-            key=lambda x: x["name"]
+            key=lambda x: x["name"],
         )
 
     def _serialize_function(self, func):
@@ -374,19 +371,20 @@ class PathIndependentPickler:
             "code": self._serialize_code(code),
             "closure": self._serialize_closure(func.__closure__, code.co_freevars),
             "globals": sorted(
-                name for name in code.co_names
-                if name in func.__globals__ and name not in ('__builtins__', '__name__', '__file__')
-            )
+                name
+                for name in code.co_names
+                if name in func.__globals__ and name not in ("__builtins__", "__name__", "__file__")
+            ),
         }
         # Store debug information
-        self._debug.append({
-            "function_name": func.__name__,
-            "closure_vars": code.co_freevars,
-            "closure_values": [
-                cell.cell_contents for cell in (func.__closure__ or ())
-            ],
-            "serialized": result
-        })
+        self._debug.append(
+            {
+                "function_name": func.__name__,
+                "closure_vars": code.co_freevars,
+                "closure_values": [cell.cell_contents for cell in (func.__closure__ or ())],
+                "serialized": result,
+            }
+        )
         return result
 
     def dump(self, obj):
@@ -410,9 +408,8 @@ class PathIndependentPickler:
             print("Serialized JSON:")
             print(json_str)
 
-
         # Write the encoded bytes to the file
-        self.file.write(json_str.encode('utf-8'))
+        self.file.write(json_str.encode("utf-8"))
 
 
 def _get_function_source(func) -> str:
