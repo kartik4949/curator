@@ -294,68 +294,27 @@ class PathIndependentPickler(dill.Pickler):
     def __init__(self, file, **kwargs):
         super().__init__(file, **kwargs)
 
-    def save(self, obj):
-        """Override save to handle our specific standardization cases."""
-        if isinstance(obj, types.CodeType):
-            self._save_standardized_code(obj)
-        elif isinstance(obj, types.FunctionType):
-            self._save_standardized_function(obj)
-        else:
-            super().save(obj)
-
-    def _save_standardized_code(self, obj):
-        """Create a standardized copy of the code object."""
-        # Create a copy of the code object with standardized filename and line number
+    def save_code(self, obj):
+        """Override save_code to standardize code objects."""
         standardized_code = types.CodeType(
             obj.co_argcount,
             obj.co_posonlyargcount,
             obj.co_kwonlyargcount,
             obj.co_nlocals,
             obj.co_stacksize,
-            obj.co_flags,
-            obj.co_code,
-            obj.co_consts,  # Keep original consts to preserve closure references
+            obj.co_flags,  # Keep flags as-is
+            obj.co_code,  # Keep raw bytecode
+            tuple(sorted(obj.co_consts) if isinstance(obj.co_consts, (set, frozenset)) else obj.co_consts),
             tuple(sorted(obj.co_names)),
             tuple(sorted(obj.co_varnames)),
-            "<standardized>",  # Standardize filename
+            "standardized",  # Use a simple string instead of path-like
             obj.co_name,
             1,  # Standardize line number
             obj.co_lnotab,
             tuple(sorted(obj.co_freevars)),
-            tuple(sorted(obj.co_cellvars)),
+            tuple(sorted(obj.co_cellvars))
         )
         super().save(standardized_code)
-
-    def _save_standardized_function(self, obj):
-        """Create a standardized copy of the function."""
-        # Create minimal globals dictionary with only necessary items
-        new_globals = {}
-        if obj.__closure__:
-            # If the function has closures, we need to preserve the closure values
-            for name in obj.__code__.co_freevars:
-                if name in obj.__globals__:
-                    new_globals[name] = obj.__globals__[name]
-
-        # Add minimal required globals
-        new_globals.update({
-            "__builtins__": obj.__globals__["__builtins__"],
-            "__name__": "<standardized>",
-            "__package__": None,
-        })
-
-        # Create new function with standardized attributes but preserve closure
-        new_func = types.FunctionType(
-            obj.__code__,
-            new_globals,
-            "<standardized>",  # name
-            obj.__defaults__,
-            obj.__closure__,  # Preserve original closure
-        )
-        new_func.__module__ = "<standardized>"
-        new_func.__qualname__ = new_func.__name__
-
-        # Use super().save to avoid recursion
-        super().save(new_func)
 
 
 def _get_function_source(func) -> str:
