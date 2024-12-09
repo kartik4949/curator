@@ -294,11 +294,13 @@ class PathIndependentPickler(dill.Pickler):
     def __init__(self, file, **kwargs):
         super().__init__(file, **kwargs)
         # Add custom reducers to the dispatch dictionary
-        self.dispatch[types.FunctionType] = self._reduce_function
-        self.dispatch[types.CodeType] = self._reduce_code
+        self.dispatch[types.FunctionType] = self.save_function
+        self.dispatch[types.CodeType] = self.save_code
 
-    def _reduce_code(self, obj):
-        """Create a standardized copy of the code object."""
+    def save_code(self, obj):
+        """Override save_code to standardize the file path and line numbers."""
+        # Create a copy of the code object with standardized filename and line number
+        # Standardize constants by converting tuples to lists and sorting where possible
         standardized_consts = []
         for const in obj.co_consts:
             if isinstance(const, (tuple, list, set, frozenset)):
@@ -312,7 +314,7 @@ class PathIndependentPickler(dill.Pickler):
             else:
                 standardized_consts.append(const)
 
-        return types.CodeType, (
+        code = types.CodeType(
             obj.co_argcount,
             obj.co_posonlyargcount,
             obj.co_kwonlyargcount,
@@ -331,12 +333,32 @@ class PathIndependentPickler(dill.Pickler):
             tuple(sorted(obj.co_cellvars)),
         )
 
-    def _reduce_function(self, obj):
-        """Create a standardized copy of the function."""
-        # Create a copy of the function with standardized attributes
-        code = self._reduce_code(obj.__code__)[1]
-        new_code = types.CodeType(*code)
+        # Use dill's save_reduce to properly handle the code object
+        self.save_reduce(
+            types.CodeType,
+            (
+                code.co_argcount,
+                code.co_posonlyargcount,
+                code.co_kwonlyargcount,
+                code.co_nlocals,
+                code.co_stacksize,
+                code.co_flags,
+                code.co_code,
+                tuple(standardized_consts),
+                tuple(sorted(code.co_names)),
+                tuple(sorted(code.co_varnames)),
+                "<standardized>",
+                code.co_name,
+                1,
+                code.co_lnotab,
+                tuple(sorted(code.co_freevars)),
+                tuple(sorted(code.co_cellvars)),
+            ),
+            obj=obj,
+        )
 
+    def save_function(self, obj):
+        """Override save_function to standardize function attributes."""
         # Create minimal globals dictionary
         new_globals = {
             "__builtins__": obj.__globals__["__builtins__"],
@@ -346,7 +368,7 @@ class PathIndependentPickler(dill.Pickler):
 
         # Create new function with standardized attributes
         new_func = types.FunctionType(
-            new_code,
+            obj.__code__,
             new_globals,
             "<standardized>",  # name
             obj.__defaults__,
@@ -355,8 +377,8 @@ class PathIndependentPickler(dill.Pickler):
         new_func.__module__ = "<standardized>"
         new_func.__qualname__ = new_func.__name__
 
-        # Use dill's standard function reducer on our standardized function
-        return dill._dill._function_reduce(new_func)
+        # Use dill's standard function reducer
+        dill._dill._save_function(self, new_func)
 
 
 def _get_function_source(func) -> str:
