@@ -312,7 +312,7 @@ class PathIndependentPickler(dill.Pickler):
             obj.co_nlocals,
             obj.co_stacksize,
             obj.co_flags,  # Keep all flags to preserve function type
-            obj.co_code,
+            obj.co_code,  # Keep as bytes
             tuple(
                 c if not isinstance(c, (tuple, list, set, frozenset)) else tuple(sorted(c))
                 for c in obj.co_consts
@@ -321,7 +321,7 @@ class PathIndependentPickler(dill.Pickler):
             tuple(sorted(obj.co_varnames)),
             "standardized",  # Standardize filename
             obj.co_name,  # Keep original name for better debugging
-            "1",  # Standardize first line number (as string)
+            1,  # First line number should be int, not string
             obj.co_linetable,  # Use co_linetable instead of deprecated co_lnotab
             tuple(sorted(obj.co_freevars)),
             tuple(sorted(obj.co_cellvars)),
@@ -350,7 +350,7 @@ def _get_function_hash(func: Optional[Callable]) -> str:
         func.__code__.co_nlocals,
         func.__code__.co_stacksize,
         func.__code__.co_flags,  # Keep all flags to preserve function type
-        func.__code__.co_code,
+        func.__code__.co_code,  # Keep as bytes
         tuple(
             c if not isinstance(c, (tuple, list, set, frozenset)) else tuple(sorted(c))
             for c in func.__code__.co_consts
@@ -359,7 +359,7 @@ def _get_function_hash(func: Optional[Callable]) -> str:
         tuple(sorted(func.__code__.co_varnames)),
         "standardized",  # Standardize filename
         func.__code__.co_name,  # Keep original name for better debugging
-        "1",  # Standardize first line number (as string)
+        1,  # First line number should be int, not string
         func.__code__.co_linetable,  # Use co_linetable instead of deprecated co_lnotab
         tuple(sorted(func.__code__.co_freevars)),
         tuple(sorted(func.__code__.co_cellvars)),
