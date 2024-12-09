@@ -291,6 +291,17 @@ class PathIndependentPickler(dill.Pickler):
     """A custom pickler that standardizes file paths and line numbers in code objects."""
 
     def save_code(self, obj):
+        print("\nPickling code object:")
+        print(f"  co_name: {obj.co_name}")
+        print(f"  co_filename: {obj.co_filename}")
+        print(f"  co_firstlineno: {obj.co_firstlineno}")
+        print(f"  co_flags: {obj.co_flags}")
+        print(f"  co_code: {obj.co_code.hex()}")
+        print(f"  co_names: {obj.co_names}")
+        print(f"  co_varnames: {obj.co_varnames}")
+        print(f"  co_freevars: {obj.co_freevars}")
+        print(f"  co_cellvars: {obj.co_cellvars}")
+
         # Create a copy of the code object with standardized filename and line numbers
         code = types.CodeType(
             obj.co_argcount,
@@ -312,6 +323,42 @@ class PathIndependentPickler(dill.Pickler):
         )
         # Pickle the standardized code object
         super().save_code(code)
+
+    def save_function(self, obj):
+        print("\nPickling function:")
+        print(f"  __name__: {obj.__name__}")
+        print(f"  __module__: {obj.__module__}")
+        print(f"  __qualname__: {obj.__qualname__}")
+        print(f"  __globals__ keys: {sorted(obj.__globals__.keys())}")
+        print(f"  __closure__: {obj.__closure__}")
+
+        # Save original attributes
+        orig_module = getattr(obj, "__module__", None)
+        orig_qualname = getattr(obj, "__qualname__", None)
+        orig_globals = getattr(obj, "__globals__", {})
+
+        # Standardize module and qualname
+        obj.__module__ = "<standardized>"
+        obj.__qualname__ = obj.__name__
+
+        # Filter globals to only include what's needed
+        filtered_globals = {}
+        if obj.__closure__:
+            for name in obj.__code__.co_freevars:
+                if name in orig_globals:
+                    filtered_globals[name] = orig_globals[name]
+        obj.__globals__ = filtered_globals
+
+        try:
+            # Pickle the function with standardized attributes
+            super().save_function(obj)
+        finally:
+            # Restore original attributes
+            if orig_module is not None:
+                obj.__module__ = orig_module
+            if orig_qualname is not None:
+                obj.__qualname__ = orig_qualname
+            obj.__globals__ = orig_globals
 
 
 def _get_function_hash(func) -> str:

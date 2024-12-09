@@ -1,4 +1,5 @@
 from datasets import Dataset
+from pathlib import Path
 
 from bespokelabs.curator import Prompter
 
@@ -115,9 +116,21 @@ def test_nested_call_caching(tmp_path):
     assert len(cache_dirs) == 2, f"Expected 2 cache directory but found {len(cache_dirs)}"
 
 
-def test_file_path_independence(tmp_path):
+def test_function_hash_file_independence():
     """Test that identical functions in different files produce the same hash."""
-    def create_function(name):
+    from bespokelabs.curator.prompter.prompter import _get_function_hash
+    import logging
+    import sys
+
+    # Configure logging to write to stdout
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format='%(message)s',
+        stream=sys.stdout
+    )
+    logger = logging.getLogger(__name__)
+
+    def create_function(name, tmp_path):
         # Create a temporary file with a function definition
         path = tmp_path / f"{name}.py"
         with open(path, "w") as f:
@@ -134,58 +147,70 @@ def test_func():
         return module.test_func
 
     # Create two identical functions in different files
-    func1 = create_function("module1")
-    func2 = create_function("module2")
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        func1 = create_function("module1", Path(tmp_dir))
+        func2 = create_function("module2", Path(tmp_dir))
 
-    # Create prompters with these functions
-    prompter1 = Prompter(
-        prompt_func=func1,
-        model_name="gpt-4o-mini",
-    )
-    prompter2 = Prompter(
-        prompt_func=func2,
-        model_name="gpt-4o-mini",
-    )
+        # Debug output for function 1
+        logger.debug("\nFunction 1 details:")
+        logger.debug(f"  __name__: {func1.__name__}")
+        logger.debug(f"  __module__: {func1.__module__}")
+        logger.debug(f"  __qualname__: {func1.__qualname__}")
+        logger.debug(f"  __code__.co_filename: {func1.__code__.co_filename}")
+        logger.debug(f"  __code__.co_name: {func1.__code__.co_name}")
+        logger.debug(f"  __code__.co_firstlineno: {func1.__code__.co_firstlineno}")
+        logger.debug(f"  __globals__ keys: {sorted(func1.__globals__.keys())}")
+        logger.debug(f"  __closure__: {func1.__closure__}")
 
-    # Both should use the same cache
-    result1 = prompter1(working_dir=str(tmp_path))
-    result2 = prompter2(working_dir=str(tmp_path))
+        # Debug output for function 2
+        logger.debug("\nFunction 2 details:")
+        logger.debug(f"  __name__: {func2.__name__}")
+        logger.debug(f"  __module__: {func2.__module__}")
+        logger.debug(f"  __qualname__: {func2.__qualname__}")
+        logger.debug(f"  __code__.co_filename: {func2.__code__.co_filename}")
+        logger.debug(f"  __code__.co_name: {func2.__code__.co_name}")
+        logger.debug(f"  __code__.co_firstlineno: {func2.__code__.co_firstlineno}")
+        logger.debug(f"  __globals__ keys: {sorted(func2.__globals__.keys())}")
+        logger.debug(f"  __closure__: {func2.__closure__}")
 
-    # Count cache directories, excluding metadata.db and our temporary python files
-    cache_dirs = [d for d in tmp_path.glob("*") if d.name != "metadata.db" and not d.name.endswith(".py")]
-    assert len(cache_dirs) == 1, f"Expected 1 cache directory but found {len(cache_dirs)}"
-    assert result1.to_pandas().iloc[0]["response"] == result2.to_pandas().iloc[0]["response"]
+        # Both should produce the same hash
+        hash1 = _get_function_hash(func1)
+        hash2 = _get_function_hash(func2)
+        logger.debug(f"\nHash comparison:")
+        logger.debug(f"  hash1: {hash1}")
+        logger.debug(f"  hash2: {hash2}")
+        assert hash1 == hash2, "Identical functions should produce the same hash"
 
 
-def test_closure_variable_handling(tmp_path):
+def test_function_hash_closure_handling():
     """Test that functions with closure variables are handled correctly."""
-    outer_value = "outer"
+    from bespokelabs.curator.prompter.prompter import _get_function_hash
 
     def create_function():
+        outer_value = "outer"
         inner_value = "inner"
         def func():
-            return f"Say '{outer_value} {inner_value}'. Do not explain."
+            return f"{outer_value} {inner_value}"
         return func
 
     # Create two instances of the same function with closures
     func1 = create_function()
     func2 = create_function()
 
-    prompter1 = Prompter(
-        prompt_func=func1,
-        model_name="gpt-4o-mini",
-    )
-    prompter2 = Prompter(
-        prompt_func=func2,
-        model_name="gpt-4o-mini",
-    )
+    # Both should produce the same hash
+    hash1 = _get_function_hash(func1)
+    hash2 = _get_function_hash(func2)
+    assert hash1 == hash2, "Identical functions with closures should produce the same hash"
 
-    # Both should use the same cache since they're identical
-    result1 = prompter1(working_dir=str(tmp_path))
-    result2 = prompter2(working_dir=str(tmp_path))
+    # Verify that different closure values produce different hashes
+    def create_function_different_closure():
+        outer_value = "different"
+        inner_value = "values"
+        def func():
+            return f"{outer_value} {inner_value}"
+        return func
 
-    # Count cache directories, excluding metadata.db
-    cache_dirs = [d for d in tmp_path.glob("*") if d.name != "metadata.db"]
-    assert len(cache_dirs) == 1, f"Expected 1 cache directory but found {len(cache_dirs)}"
-    assert result1.to_pandas().iloc[0]["response"] == result2.to_pandas().iloc[0]["response"]
-    assert "outer inner" in result1.to_pandas().iloc[0]["response"]
+    func3 = create_function_different_closure()
+    hash3 = _get_function_hash(func3)
+    assert hash1 != hash3, "Functions with different closure values should produce different hashes"
