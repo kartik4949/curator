@@ -291,16 +291,17 @@ class PathIndependentPickler(dill.Pickler):
     """A custom pickler that standardizes file paths and line numbers in code objects."""
 
     def save_code(self, obj):
-        print("\nPickling code object:")
-        print(f"  co_name: {obj.co_name}")
-        print(f"  co_filename: {obj.co_filename}")
-        print(f"  co_firstlineno: {obj.co_firstlineno}")
-        print(f"  co_flags: {obj.co_flags}")
-        print(f"  co_code: {obj.co_code.hex()}")
-        print(f"  co_names: {obj.co_names}")
-        print(f"  co_varnames: {obj.co_varnames}")
-        print(f"  co_freevars: {obj.co_freevars}")
-        print(f"  co_cellvars: {obj.co_cellvars}")
+        import sys
+        sys.stderr.write("\nPickling code object:\n")
+        sys.stderr.write(f"  co_name: {obj.co_name}\n")
+        sys.stderr.write(f"  co_filename: {obj.co_filename}\n")
+        sys.stderr.write(f"  co_firstlineno: {obj.co_firstlineno}\n")
+        sys.stderr.write(f"  co_flags: {obj.co_flags}\n")
+        sys.stderr.write(f"  co_code: {obj.co_code.hex()}\n")
+        sys.stderr.write(f"  co_names: {obj.co_names}\n")
+        sys.stderr.write(f"  co_varnames: {obj.co_varnames}\n")
+        sys.stderr.write(f"  co_freevars: {obj.co_freevars}\n")
+        sys.stderr.write(f"  co_cellvars: {obj.co_cellvars}\n")
 
         # Create a copy of the code object with standardized filename and line numbers
         code = types.CodeType(
@@ -325,12 +326,13 @@ class PathIndependentPickler(dill.Pickler):
         super().save_code(code)
 
     def save_function(self, obj):
-        print("\nPickling function:")
-        print(f"  __name__: {obj.__name__}")
-        print(f"  __module__: {obj.__module__}")
-        print(f"  __qualname__: {obj.__qualname__}")
-        print(f"  __globals__ keys: {sorted(obj.__globals__.keys())}")
-        print(f"  __closure__: {obj.__closure__}")
+        import sys
+        sys.stderr.write("\nPickling function:\n")
+        sys.stderr.write(f"  __name__: {obj.__name__}\n")
+        sys.stderr.write(f"  __module__: {obj.__module__}\n")
+        sys.stderr.write(f"  __qualname__: {obj.__qualname__}\n")
+        sys.stderr.write(f"  __globals__ keys: {sorted(obj.__globals__.keys())}\n")
+        sys.stderr.write(f"  __closure__: {obj.__closure__}\n")
 
         # Save original attributes
         orig_module = getattr(obj, "__module__", None)

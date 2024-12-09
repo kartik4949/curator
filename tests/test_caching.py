@@ -136,7 +136,10 @@ def test_function_hash_file_independence():
         with open(path, "w") as f:
             f.write("""
 def test_func():
-    return "Hello, World!"
+    x = 42  # Add a constant
+    y = "Hello"  # Add a string constant
+    z = [1, 2, 3]  # Add a list constant
+    return f"{y}, {x}! {z}"  # Use all constants
 """)
 
         # Import the function from the file
@@ -160,6 +163,10 @@ def test_func():
         logger.debug(f"  __code__.co_filename: {func1.__code__.co_filename}")
         logger.debug(f"  __code__.co_name: {func1.__code__.co_name}")
         logger.debug(f"  __code__.co_firstlineno: {func1.__code__.co_firstlineno}")
+        logger.debug(f"  __code__.co_consts: {func1.__code__.co_consts}")
+        logger.debug(f"  __code__.co_names: {func1.__code__.co_names}")
+        logger.debug(f"  __code__.co_varnames: {func1.__code__.co_varnames}")
+        logger.debug(f"  __code__.co_code: {func1.__code__.co_code.hex()}")
         logger.debug(f"  __globals__ keys: {sorted(func1.__globals__.keys())}")
         logger.debug(f"  __closure__: {func1.__closure__}")
 
@@ -171,6 +178,10 @@ def test_func():
         logger.debug(f"  __code__.co_filename: {func2.__code__.co_filename}")
         logger.debug(f"  __code__.co_name: {func2.__code__.co_name}")
         logger.debug(f"  __code__.co_firstlineno: {func2.__code__.co_firstlineno}")
+        logger.debug(f"  __code__.co_consts: {func2.__code__.co_consts}")
+        logger.debug(f"  __code__.co_names: {func2.__code__.co_names}")
+        logger.debug(f"  __code__.co_varnames: {func2.__code__.co_varnames}")
+        logger.debug(f"  __code__.co_code: {func2.__code__.co_code.hex()}")
         logger.debug(f"  __globals__ keys: {sorted(func2.__globals__.keys())}")
         logger.debug(f"  __closure__: {func2.__closure__}")
 
