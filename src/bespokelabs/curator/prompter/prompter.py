@@ -292,70 +292,80 @@ class PathIndependentPickler(dill.Pickler):
     """A custom pickler that ensures consistent function serialization across different file paths."""
 
     def __init__(self, file, **kwargs):
+        kwargs['protocol'] = 4  # Use a fixed protocol version
         super().__init__(file, **kwargs)
+        # Use dill's dispatch table for consistent serialization
+        self.dispatch = dill._dill.MetaCatchingDict(self.dispatch)
 
     def save_function(self, obj):
         """Override save_function to standardize module-level attributes."""
-        # Create minimal globals with only builtins
-        new_globals = {"__builtins__": obj.__globals__["__builtins__"]}
-
         # Create standardized code object
-        standardized_code = types.CodeType(
+        code = types.CodeType(
             obj.__code__.co_argcount,
             obj.__code__.co_posonlyargcount,
             obj.__code__.co_kwonlyargcount,
             obj.__code__.co_nlocals,
             obj.__code__.co_stacksize,
-            obj.__code__.co_flags & ~0b111111111111111,  # Clear position-dependent flags
+            obj.__code__.co_flags,  # Keep all flags to preserve function type
             obj.__code__.co_code,
-            tuple(sorted(obj.__code__.co_consts) if isinstance(obj.__code__.co_consts, (tuple, set, frozenset)) else obj.__code__.co_consts),
+            tuple(c if not isinstance(c, (tuple, list, set, frozenset)) else tuple(sorted(c)) for c in obj.__code__.co_consts),
             tuple(sorted(obj.__code__.co_names)),
             tuple(sorted(obj.__code__.co_varnames)),
             "standardized",  # Standardize filename
-            "standardized_function",  # Standardize function name
+            obj.__code__.co_name,  # Keep original name for better debugging
             1,  # Standardize first line number
             obj.__code__.co_lnotab,
             tuple(sorted(obj.__code__.co_freevars)),
             tuple(sorted(obj.__code__.co_cellvars))
         )
 
-        # Create new function with minimal context
+        # Create minimal globals
+        new_globals = {
+            "__builtins__": obj.__globals__["__builtins__"],
+            "__name__": "standardized_module",
+            "__package__": None,
+        }
+
+        # Create new function with standardized attributes
         new_func = types.FunctionType(
-            standardized_code,
+            code,
             new_globals,
-            "standardized_function",
+            obj.__name__,  # Keep original name
             obj.__defaults__,
-            obj.__closure__  # Keep original closure to maintain behavior
+            obj.__closure__  # Keep original closure
         )
 
-        # Standardize function attributes
-        new_func.__module__ = "standardized_module"
-        new_func.__qualname__ = "standardized_function"
+        # Copy function attributes that affect behavior
+        if hasattr(obj, "__kwdefaults__"):
+            new_func.__kwdefaults__ = obj.__kwdefaults__
+        if hasattr(obj, "__annotations__"):
+            new_func.__annotations__ = obj.__annotations__
 
         # Save the standardized function
         super().save(new_func)
 
     def save_code(self, obj):
         """Override save_code to standardize code objects."""
-        standardized_code = types.CodeType(
+        # Create standardized code object
+        code = types.CodeType(
             obj.co_argcount,
             obj.co_posonlyargcount,
             obj.co_kwonlyargcount,
             obj.co_nlocals,
             obj.co_stacksize,
-            obj.co_flags & ~0b111111111111111,  # Clear position-dependent flags
+            obj.co_flags,  # Keep all flags to preserve function type
             obj.co_code,
-            tuple(sorted(obj.co_consts) if isinstance(obj.co_consts, (tuple, set, frozenset)) else obj.co_consts),
+            tuple(c if not isinstance(c, (tuple, list, set, frozenset)) else tuple(sorted(c)) for c in obj.co_consts),
             tuple(sorted(obj.co_names)),
             tuple(sorted(obj.co_varnames)),
             "standardized",  # Standardize filename
-            "standardized_function",  # Standardize function name
+            obj.co_name,  # Keep original name for better debugging
             1,  # Standardize first line number
             obj.co_lnotab,
             tuple(sorted(obj.co_freevars)),
             tuple(sorted(obj.co_cellvars))
         )
-        super().save(standardized_code)
+        super().save(code)
 
 
 def _get_function_source(func: Callable) -> str:
