@@ -288,128 +288,49 @@ class Prompter:
         return dataset
 
 
-class PathIndependentPickler:
-    """A custom serializer that ensures consistent function serialization."""
+class PathIndependentPickler(dill.Pickler):
+    """A custom pickler that ensures consistent function serialization across different file paths."""
 
-    def __init__(self, file):
-        """Initialize the serializer."""
-        self.file = file
-        self._debug = []  # Store debug information
-
-    def _serialize_code(self, code):
-        """Serialize only the essential parts of a code object."""
-        return {
-            "bytecode": code.co_code.hex(),  # bytecode as hex string
-            "constants": [
-                (
-                    self._serialize_code(c)
-                    if isinstance(c, types.CodeType)
-                    else (list(c) if isinstance(c, (tuple, set, frozenset)) else c)
-                )
-                for c in code.co_consts
-            ],
-            "names": sorted(code.co_names),
-            "varnames": sorted(code.co_varnames),
-            "freevars": sorted(code.co_freevars),
-            "cellvars": sorted(code.co_cellvars),
-            "argcount": code.co_argcount,
-            "posonlyargcount": code.co_posonlyargcount,
-            "kwonlyargcount": code.co_kwonlyargcount,
-            "nlocals": code.co_nlocals,
-            "stacksize": code.co_stacksize,
-            "flags": code.co_flags & ~0b111111111111111,  # Clear position-dependent flags
-        }
-
-    def _serialize_value(self, value):
-        """Serialize a value with type preservation."""
-        if value is None:
-            return {"type": "NoneType", "value": None}
-        elif isinstance(value, (bool, int, float)):
-            return {"type": type(value).__name__, "value": value}
-        elif isinstance(value, str):
-            return {"type": "str", "value": value}
-        elif isinstance(value, (list, tuple)):
-            return {
-                "type": type(value).__name__,
-                "value": [self._serialize_value(v) for v in value],
-            }
-        elif isinstance(value, dict):
-            return {
-                "type": "dict",
-                "value": {
-                    str(k): self._serialize_value(v)
-                    for k, v in sorted(value.items(), key=lambda x: str(x[0]))
-                },
-            }
-        elif isinstance(value, types.FunctionType):
-            return {"type": "function", "value": self._serialize_function(value)}
-        else:
-            # For other types, preserve both type and string representation
-            return {"type": type(value).__name__, "repr": repr(value), "str": str(value)}
-
-    def _serialize_closure(self, closure, freevars):
-        """Serialize closure cells with value preservation."""
-        if not closure:
-            return None
-
-        # Create a dictionary mapping closure variable names to their values
-        closure_dict = {}
-        for name, cell in zip(freevars, closure):
-            value = cell.cell_contents
-            closure_dict[name] = self._serialize_value(value)
-
-        # Return a sorted list of (name, value) pairs for consistent ordering
-        return sorted(
-            [{"name": name, "value": value} for name, value in closure_dict.items()],
-            key=lambda x: x["name"],
+    def save_code(self, obj):
+        """Override save_code to standardize the file path and line numbers."""
+        # Create a copy of the code object with standardized filename and line number
+        code = types.CodeType(
+            obj.co_argcount,
+            obj.co_posonlyargcount,
+            obj.co_kwonlyargcount,
+            obj.co_nlocals,
+            obj.co_stacksize,
+            obj.co_flags,  # Keep flags as-is to preserve function type information
+            obj.co_code,  # Keep raw bytecode
+            obj.co_consts,
+            obj.co_names,
+            obj.co_varnames,
+            "<standardized>",  # Standardize filename
+            obj.co_name,
+            1,  # Standardize line number
+            obj.co_lnotab,
+            obj.co_freevars,
+            obj.co_cellvars,
         )
-
-    def _serialize_function(self, func):
-        """Create a minimal, deterministic serialization of a function."""
-        code = func.__code__
-        result = {
-            "code": self._serialize_code(code),
-            "closure": self._serialize_closure(func.__closure__, code.co_freevars),
-            "globals": sorted(
-                name
-                for name in code.co_names
-                if name in func.__globals__ and name not in ("__builtins__", "__name__", "__file__")
-            ),
-        }
-        # Store debug information
-        self._debug.append(
-            {
-                "function_name": func.__name__,
-                "closure_vars": code.co_freevars,
-                "closure_values": [cell.cell_contents for cell in (func.__closure__ or ())],
-                "serialized": result,
-            }
-        )
-        return result
-
-    def dump(self, obj):
-        """Serialize the object to JSON with consistent ordering."""
-        if not isinstance(obj, types.FunctionType):
-            raise TypeError("Can only serialize function objects")
-
-        # Clear debug information
-        self._debug = []
-
-        # Serialize to JSON with sorted keys and ensure_ascii=True for consistent encoding
-        result = self._serialize_function(obj)
-        json_str = json.dumps(result, sort_keys=True, ensure_ascii=True, indent=2)
-
-        # Print debug information
-        print("\nFunction serialization debug:")
-        for debug_info in self._debug:
-            print(f"\nFunction: {debug_info['function_name']}")
-            print(f"Closure variables: {debug_info['closure_vars']}")
-            print(f"Closure values: {debug_info['closure_values']}")
-            print("Serialized JSON:")
-            print(json_str)
-
-        # Write the encoded bytes to the file
-        self.file.write(json_str.encode("utf-8"))
+        # Use dill's save_reduce to properly handle the code object
+        self.save_reduce(types.CodeType, args=(
+            code.co_argcount,
+            code.co_posonlyargcount,
+            code.co_kwonlyargcount,
+            code.co_nlocals,
+            code.co_stacksize,
+            code.co_flags,
+            code.co_code,
+            code.co_consts,
+            code.co_names,
+            code.co_varnames,
+            "<standardized>",
+            code.co_name,
+            1,
+            code.co_lnotab,
+            code.co_freevars,
+            code.co_cellvars,
+        ), obj=obj)
 
 
 def _get_function_source(func) -> str:
@@ -427,18 +348,7 @@ def _get_function_hash(func) -> str:
     if func is None:
         return xxh64("").hexdigest()
 
-    # Create a BytesIO buffer for serialization
     file = BytesIO()
-    serializer = PathIndependentPickler(file)
-
-    try:
-        # Serialize the function to JSON
-        serializer.dump(func)
-        # Get the hash of the serialized data
-        serialized_data = file.getvalue()
-        hash_value = xxh64(serialized_data).hexdigest()
-        print(f"\nHash value: {hash_value}")
-        return hash_value
-    except Exception as e:
-        # If serialization fails, fall back to source code hash
-        return xxh64(_get_function_source(func).encode()).hexdigest()
+    pickler = PathIndependentPickler(file, recurse=True)
+    pickler.dump(func)
+    return xxh64(file.getvalue()).hexdigest()
