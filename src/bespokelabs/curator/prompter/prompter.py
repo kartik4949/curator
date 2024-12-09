@@ -294,6 +294,21 @@ class PathIndependentPickler(dill.Pickler):
     def save_code(self, obj):
         """Override save_code to standardize the file path and line numbers."""
         # Create a copy of the code object with standardized filename and line number
+        # Standardize constants by converting tuples to lists and sorting where possible
+        standardized_consts = []
+        for const in obj.co_consts:
+            if isinstance(const, (tuple, list, set, frozenset)):
+                # Convert to sorted list for consistent ordering
+                standardized_consts.append(sorted(const))
+            elif isinstance(const, types.CodeType):
+                # Recursively standardize nested code objects
+                file = BytesIO()
+                pickler = PathIndependentPickler(file, recurse=True)
+                pickler.save_code(const)
+                standardized_consts.append(file.getvalue())
+            else:
+                standardized_consts.append(const)
+
         code = types.CodeType(
             obj.co_argcount,
             obj.co_posonlyargcount,
@@ -302,7 +317,7 @@ class PathIndependentPickler(dill.Pickler):
             obj.co_stacksize,
             obj.co_flags,  # Keep flags as-is to preserve function type information
             obj.co_code,  # Keep raw bytecode
-            obj.co_consts,
+            tuple(standardized_consts),  # Use standardized constants
             tuple(sorted(obj.co_names)),  # Sort names for consistent ordering
             tuple(sorted(obj.co_varnames)),  # Sort varnames for consistent ordering
             "<standardized>",  # Standardize filename
@@ -323,7 +338,7 @@ class PathIndependentPickler(dill.Pickler):
                 code.co_stacksize,
                 code.co_flags,
                 code.co_code,
-                code.co_consts,
+                tuple(standardized_consts),  # Use standardized constants
                 tuple(sorted(code.co_names)),  # Sort names for consistent ordering
                 tuple(sorted(code.co_varnames)),  # Sort varnames for consistent ordering
                 "<standardized>",
