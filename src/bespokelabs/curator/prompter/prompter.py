@@ -303,14 +303,14 @@ class PathIndependentPickler(dill.Pickler):
             obj.co_flags,  # Keep flags as-is to preserve function type information
             obj.co_code,  # Keep raw bytecode
             obj.co_consts,
-            obj.co_names,
-            obj.co_varnames,
+            tuple(sorted(obj.co_names)),  # Sort names for consistent ordering
+            tuple(sorted(obj.co_varnames)),  # Sort varnames for consistent ordering
             "<standardized>",  # Standardize filename
             obj.co_name,
             1,  # Standardize line number
             obj.co_lnotab,
-            obj.co_freevars,
-            obj.co_cellvars,
+            tuple(sorted(obj.co_freevars)),  # Sort freevars for consistent ordering
+            tuple(sorted(obj.co_cellvars)),  # Sort cellvars for consistent ordering
         )
         # Use dill's save_reduce to properly handle the code object
         self.save_reduce(
@@ -324,14 +324,14 @@ class PathIndependentPickler(dill.Pickler):
                 code.co_flags,
                 code.co_code,
                 code.co_consts,
-                code.co_names,
-                code.co_varnames,
+                tuple(sorted(code.co_names)),  # Sort names for consistent ordering
+                tuple(sorted(code.co_varnames)),  # Sort varnames for consistent ordering
                 "<standardized>",
                 code.co_name,
                 1,
                 code.co_lnotab,
-                code.co_freevars,
-                code.co_cellvars,
+                tuple(sorted(code.co_freevars)),  # Sort freevars for consistent ordering
+                tuple(sorted(code.co_cellvars)),  # Sort cellvars for consistent ordering
             ),
             obj=obj,
         )
