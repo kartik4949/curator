@@ -113,3 +113,79 @@ def test_nested_call_caching(tmp_path):
     # Count cache directories, excluding metadata.db
     cache_dirs = [d for d in tmp_path.glob("*") if d.name != "metadata.db"]
     assert len(cache_dirs) == 2, f"Expected 2 cache directory but found {len(cache_dirs)}"
+
+
+def test_file_path_independence(tmp_path):
+    """Test that identical functions in different files produce the same hash."""
+    def create_function(name):
+        # Create a temporary file with a function definition
+        path = tmp_path / f"{name}.py"
+        with open(path, "w") as f:
+            f.write("""
+def test_func():
+    return "Hello, World!"
+""")
+
+        # Import the function from the file
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(name, path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module.test_func
+
+    # Create two identical functions in different files
+    func1 = create_function("module1")
+    func2 = create_function("module2")
+
+    # Create prompters with these functions
+    prompter1 = Prompter(
+        prompt_func=func1,
+        model_name="gpt-4o-mini",
+    )
+    prompter2 = Prompter(
+        prompt_func=func2,
+        model_name="gpt-4o-mini",
+    )
+
+    # Both should use the same cache
+    result1 = prompter1(working_dir=str(tmp_path))
+    result2 = prompter2(working_dir=str(tmp_path))
+
+    # Count cache directories, excluding metadata.db and our temporary python files
+    cache_dirs = [d for d in tmp_path.glob("*") if d.name != "metadata.db" and not d.name.endswith(".py")]
+    assert len(cache_dirs) == 1, f"Expected 1 cache directory but found {len(cache_dirs)}"
+    assert result1.to_pandas().iloc[0]["response"] == result2.to_pandas().iloc[0]["response"]
+
+
+def test_closure_variable_handling(tmp_path):
+    """Test that functions with closure variables are handled correctly."""
+    outer_value = "outer"
+
+    def create_function():
+        inner_value = "inner"
+        def func():
+            return f"Say '{outer_value} {inner_value}'. Do not explain."
+        return func
+
+    # Create two instances of the same function with closures
+    func1 = create_function()
+    func2 = create_function()
+
+    prompter1 = Prompter(
+        prompt_func=func1,
+        model_name="gpt-4o-mini",
+    )
+    prompter2 = Prompter(
+        prompt_func=func2,
+        model_name="gpt-4o-mini",
+    )
+
+    # Both should use the same cache since they're identical
+    result1 = prompter1(working_dir=str(tmp_path))
+    result2 = prompter2(working_dir=str(tmp_path))
+
+    # Count cache directories, excluding metadata.db
+    cache_dirs = [d for d in tmp_path.glob("*") if d.name != "metadata.db"]
+    assert len(cache_dirs) == 1, f"Expected 1 cache directory but found {len(cache_dirs)}"
+    assert result1.to_pandas().iloc[0]["response"] == result2.to_pandas().iloc[0]["response"]
+    assert "outer inner" in result1.to_pandas().iloc[0]["response"]
