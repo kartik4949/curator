@@ -121,14 +121,47 @@ def test_function_hash_file_independence():
     from bespokelabs.curator.prompter.prompter import _get_function_hash
     import logging
     import sys
+    from pathlib import Path
+    import tempfile
+    import os
 
-    # Configure logging to write to stdout
+    # Set up logging to write to a file
+    debug_log = Path(tempfile.gettempdir()) / "function_debug.log"
     logging.basicConfig(
         level=logging.DEBUG,
         format='%(message)s',
-        stream=sys.stdout
+        filename=str(debug_log),
+        filemode='w'
     )
     logger = logging.getLogger(__name__)
+
+    def dump_function_details(func, prefix):
+        """Helper to dump all function details."""
+        logger.debug(f"\n{prefix} details:")
+        # Basic attributes
+        logger.debug(f"  __name__: {func.__name__}")
+        logger.debug(f"  __module__: {func.__module__}")
+        logger.debug(f"  __qualname__: {func.__qualname__}")
+
+        # Code object details
+        code = func.__code__
+        logger.debug(f"  __code__.co_filename: {code.co_filename}")
+        logger.debug(f"  __code__.co_name: {code.co_name}")
+        logger.debug(f"  __code__.co_firstlineno: {code.co_firstlineno}")
+        logger.debug(f"  __code__.co_consts: {code.co_consts}")
+        logger.debug(f"  __code__.co_names: {code.co_names}")
+        logger.debug(f"  __code__.co_varnames: {code.co_varnames}")
+        logger.debug(f"  __code__.co_code: {code.co_code.hex()}")
+        logger.debug(f"  __code__.co_flags: {code.co_flags}")
+        logger.debug(f"  __code__.co_stacksize: {code.co_stacksize}")
+        logger.debug(f"  __code__.co_freevars: {code.co_freevars}")
+        logger.debug(f"  __code__.co_cellvars: {code.co_cellvars}")
+
+        # Function context
+        logger.debug(f"  __globals__ keys: {sorted(func.__globals__.keys())}")
+        logger.debug(f"  __closure__: {func.__closure__}")
+        logger.debug(f"  __defaults__: {func.__defaults__}")
+        logger.debug(f"  __kwdefaults__: {func.__kwdefaults__}")
 
     def create_function(name, tmp_path):
         # Create a temporary file with a function definition
@@ -150,40 +183,13 @@ def test_func():
         return module.test_func
 
     # Create two identical functions in different files
-    import tempfile
     with tempfile.TemporaryDirectory() as tmp_dir:
         func1 = create_function("module1", Path(tmp_dir))
         func2 = create_function("module2", Path(tmp_dir))
 
-        # Debug output for function 1
-        logger.debug("\nFunction 1 details:")
-        logger.debug(f"  __name__: {func1.__name__}")
-        logger.debug(f"  __module__: {func1.__module__}")
-        logger.debug(f"  __qualname__: {func1.__qualname__}")
-        logger.debug(f"  __code__.co_filename: {func1.__code__.co_filename}")
-        logger.debug(f"  __code__.co_name: {func1.__code__.co_name}")
-        logger.debug(f"  __code__.co_firstlineno: {func1.__code__.co_firstlineno}")
-        logger.debug(f"  __code__.co_consts: {func1.__code__.co_consts}")
-        logger.debug(f"  __code__.co_names: {func1.__code__.co_names}")
-        logger.debug(f"  __code__.co_varnames: {func1.__code__.co_varnames}")
-        logger.debug(f"  __code__.co_code: {func1.__code__.co_code.hex()}")
-        logger.debug(f"  __globals__ keys: {sorted(func1.__globals__.keys())}")
-        logger.debug(f"  __closure__: {func1.__closure__}")
-
-        # Debug output for function 2
-        logger.debug("\nFunction 2 details:")
-        logger.debug(f"  __name__: {func2.__name__}")
-        logger.debug(f"  __module__: {func2.__module__}")
-        logger.debug(f"  __qualname__: {func2.__qualname__}")
-        logger.debug(f"  __code__.co_filename: {func2.__code__.co_filename}")
-        logger.debug(f"  __code__.co_name: {func2.__code__.co_name}")
-        logger.debug(f"  __code__.co_firstlineno: {func2.__code__.co_firstlineno}")
-        logger.debug(f"  __code__.co_consts: {func2.__code__.co_consts}")
-        logger.debug(f"  __code__.co_names: {func2.__code__.co_names}")
-        logger.debug(f"  __code__.co_varnames: {func2.__code__.co_varnames}")
-        logger.debug(f"  __code__.co_code: {func2.__code__.co_code.hex()}")
-        logger.debug(f"  __globals__ keys: {sorted(func2.__globals__.keys())}")
-        logger.debug(f"  __closure__: {func2.__closure__}")
+        # Dump detailed information about both functions
+        dump_function_details(func1, "Function 1")
+        dump_function_details(func2, "Function 2")
 
         # Both should produce the same hash
         hash1 = _get_function_hash(func1)
@@ -191,6 +197,15 @@ def test_func():
         logger.debug(f"\nHash comparison:")
         logger.debug(f"  hash1: {hash1}")
         logger.debug(f"  hash2: {hash2}")
+
+        # Print the location of the debug log
+        print(f"\nDebug log written to: {debug_log}")
+
+        # Read and print the debug log
+        with open(debug_log, 'r') as f:
+            print("\nDebug log contents:")
+            print(f.read())
+
         assert hash1 == hash2, "Identical functions should produce the same hash"
 
 
