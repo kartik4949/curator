@@ -294,55 +294,13 @@ class PathIndependentPickler(dill.Pickler):
     def __init__(self, file, **kwargs):
         kwargs['protocol'] = 4  # Use a fixed protocol version
         super().__init__(file, **kwargs)
-        # Use dill's dispatch table for consistent serialization
-        self.dispatch = dill._dill.MetaCatchingDict(self.dispatch)
 
     def save_function(self, obj):
         """Override save_function to standardize module-level attributes."""
-        # Create standardized code object
-        code = types.CodeType(
-            obj.__code__.co_argcount,
-            obj.__code__.co_posonlyargcount,
-            obj.__code__.co_kwonlyargcount,
-            obj.__code__.co_nlocals,
-            obj.__code__.co_stacksize,
-            obj.__code__.co_flags,  # Keep all flags to preserve function type
-            obj.__code__.co_code,
-            tuple(c if not isinstance(c, (tuple, list, set, frozenset)) else tuple(sorted(c)) for c in obj.__code__.co_consts),
-            tuple(sorted(obj.__code__.co_names)),
-            tuple(sorted(obj.__code__.co_varnames)),
-            "standardized",  # Standardize filename
-            obj.__code__.co_name,  # Keep original name for better debugging
-            1,  # Standardize first line number
-            obj.__code__.co_lnotab,
-            tuple(sorted(obj.__code__.co_freevars)),
-            tuple(sorted(obj.__code__.co_cellvars))
-        )
-
-        # Create minimal globals
-        new_globals = {
-            "__builtins__": obj.__globals__["__builtins__"],
-            "__name__": "standardized_module",
-            "__package__": None,
-        }
-
-        # Create new function with standardized attributes
-        new_func = types.FunctionType(
-            code,
-            new_globals,
-            obj.__name__,  # Keep original name
-            obj.__defaults__,
-            obj.__closure__  # Keep original closure
-        )
-
-        # Copy function attributes that affect behavior
-        if hasattr(obj, "__kwdefaults__"):
-            new_func.__kwdefaults__ = obj.__kwdefaults__
-        if hasattr(obj, "__annotations__"):
-            new_func.__annotations__ = obj.__annotations__
-
-        # Save the standardized function
-        super().save(new_func)
+        # Standardize module attributes
+        obj.__module__ = "standardized_module"
+        obj.__qualname__ = obj.__name__
+        super().save(obj)
 
     def save_code(self, obj):
         """Override save_code to standardize code objects."""
@@ -381,10 +339,48 @@ def _get_function_hash(func: Optional[Callable]) -> str:
     if func is None:
         return xxh64("").hexdigest()
 
-    # Serialize the function using our path-independent pickler
+    # Create a standardized code object
+    code = types.CodeType(
+        func.__code__.co_argcount,
+        func.__code__.co_posonlyargcount,
+        func.__code__.co_kwonlyargcount,
+        func.__code__.co_nlocals,
+        func.__code__.co_stacksize,
+        func.__code__.co_flags,  # Keep all flags to preserve function type
+        func.__code__.co_code,
+        tuple(c if not isinstance(c, (tuple, list, set, frozenset)) else tuple(sorted(c)) for c in func.__code__.co_consts),
+        tuple(sorted(func.__code__.co_names)),
+        tuple(sorted(func.__code__.co_varnames)),
+        "standardized",  # Standardize filename
+        func.__code__.co_name,  # Keep original name for better debugging
+        1,  # Standardize first line number
+        func.__code__.co_lnotab,
+        tuple(sorted(func.__code__.co_freevars)),
+        tuple(sorted(func.__code__.co_cellvars))
+    )
+
+    # Create minimal globals with only builtins
+    new_globals = {"__builtins__": func.__globals__["__builtins__"]}
+
+    # Create new function with standardized attributes
+    new_func = types.FunctionType(
+        code,
+        new_globals,
+        func.__name__,
+        func.__defaults__,
+        func.__closure__
+    )
+
+    # Copy function attributes that affect behavior
+    if hasattr(func, "__kwdefaults__"):
+        new_func.__kwdefaults__ = func.__kwdefaults__
+    if hasattr(func, "__annotations__"):
+        new_func.__annotations__ = func.__annotations__
+
+    # Serialize the standardized function
     file = BytesIO()
     pickler = PathIndependentPickler(file)
-    pickler.dump(func)
+    pickler.dump(new_func)
     serialized = file.getvalue()
 
     # Generate a hash of the serialized function
