@@ -319,9 +319,9 @@ class PathIndependentPickler(dill.Pickler):
             ),
             tuple(sorted(obj.co_names)),
             tuple(sorted(obj.co_varnames)),
+            1,  # Standardize first line number
             "standardized",  # Standardize filename
             obj.co_name,  # Keep original name for better debugging
-            1,  # Standardize first line number
             obj.co_linetable,  # Use co_linetable instead of deprecated co_lnotab
             tuple(sorted(obj.co_freevars)),
             tuple(sorted(obj.co_cellvars)),
@@ -357,9 +357,9 @@ def _get_function_hash(func: Optional[Callable]) -> str:
         ),
         tuple(sorted(func.__code__.co_names)),
         tuple(sorted(func.__code__.co_varnames)),
+        1,  # Standardize first line number
         "standardized",  # Standardize filename
         "test_func",  # Keep original name for better debugging
-        1,  # Standardize first line number
         func.__code__.co_linetable,  # Use co_linetable instead of deprecated co_lnotab
         tuple(sorted(func.__code__.co_freevars)),
         tuple(sorted(func.__code__.co_cellvars)),
