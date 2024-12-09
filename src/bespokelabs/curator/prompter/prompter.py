@@ -338,17 +338,31 @@ class PathIndependentPickler(dill.Pickler):
         orig_module = getattr(obj, "__module__", None)
         orig_qualname = getattr(obj, "__qualname__", None)
         orig_globals = getattr(obj, "__globals__", {})
-        orig_closure = getattr(obj, "__closure__", None)
         orig_code = obj.__code__
 
         try:
             # Create a filtered copy of globals that only includes necessary items
             filtered_globals = {}
-            if obj.__closure__:
-                # Include only the globals needed for closure variables
-                for name in obj.__code__.co_freevars:
-                    if name in orig_globals:
-                        filtered_globals[name] = orig_globals[name]
+
+            # Include globals needed for closure variables and function execution
+            required_names = set()
+            if obj.__code__.co_freevars:
+                required_names.update(obj.__code__.co_freevars)
+            if obj.__code__.co_names:
+                required_names.update(obj.__code__.co_names)
+
+            # Only include required globals with standardized values
+            for name in required_names:
+                if name in orig_globals:
+                    value = orig_globals[name]
+                    # Standardize module-level variables
+                    if isinstance(value, str):
+                        filtered_globals[name] = value
+                    elif isinstance(value, (int, float, bool, type(None))):
+                        filtered_globals[name] = value
+                    else:
+                        # For other types, just indicate their presence
+                        filtered_globals[name] = f"<{type(value).__name__}>"
 
             # Standardize function attributes
             obj.__module__ = "<standardized>"
@@ -385,7 +399,7 @@ class PathIndependentPickler(dill.Pickler):
             if orig_qualname is not None:
                 obj.__qualname__ = orig_qualname
             obj.__globals__ = orig_globals
-            obj.__code__ = orig_code  # Restore original code object
+            obj.__code__ = orig_code
 
 
 def _get_function_hash(func) -> str:
