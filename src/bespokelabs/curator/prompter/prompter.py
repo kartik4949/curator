@@ -1,36 +1,36 @@
 """Curator: Bespoke Labs Synthetic Data Generation Library."""
 
 import inspect
-import json
 import logging
 import os
 from datetime import datetime
 from io import BytesIO
 from typing import Any, Callable, Dict, Iterable, Optional, Type, TypeVar, Union
-import types
 
-import dill
 from datasets import Dataset
+from datasets.utils._dill import Pickler
 from pydantic import BaseModel
 from xxhash import xxh64
 
 from bespokelabs.curator.db import MetadataDB
 from bespokelabs.curator.prompter.prompt_formatter import PromptFormatter
-from bespokelabs.curator.request_processor.base_request_processor import BaseRequestProcessor
+from bespokelabs.curator.request_processor.base_request_processor import (
+    BaseRequestProcessor,
+)
+from bespokelabs.curator.request_processor.litellm_online_request_processor import (
+    LiteLLMOnlineRequestProcessor,
+)
 from bespokelabs.curator.request_processor.openai_batch_request_processor import (
     OpenAIBatchRequestProcessor,
 )
 from bespokelabs.curator.request_processor.openai_online_request_processor import (
     OpenAIOnlineRequestProcessor,
 )
-from bespokelabs.curator.request_processor.litellm_online_request_processor import (
-    LiteLLMOnlineRequestProcessor,
-)
 
 _CURATOR_DEFAULT_CACHE_DIR = "~/.cache/curator"
 T = TypeVar("T")
 
-logger = logging.getLogger(__name__)
+logger = logger = logging.getLogger(__name__)
 
 
 class Prompter:
@@ -87,12 +87,13 @@ class Prompter:
         backend: Optional[str] = None,
         batch: bool = False,
         batch_size: Optional[int] = None,
+        batch_check_interval: Optional[int] = 60,
+        delete_successful_batch_files: bool = True,
+        delete_failed_batch_files: bool = False,  # To allow users to debug failed batches
         temperature: Optional[float] = None,
         top_p: Optional[float] = None,
         presence_penalty: Optional[float] = None,
         frequency_penalty: Optional[float] = None,
-        delete_successful_batch_files: bool = True,
-        delete_failed_batch_files: bool = False,  # To allow users to debug failed batches
     ):
         """Initialize a Prompter.
 
@@ -150,6 +151,7 @@ class Prompter:
                     batch_size=batch_size,
                     temperature=temperature,
                     top_p=top_p,
+                    batch_check_interval=batch_check_interval,
                     presence_penalty=presence_penalty,
                     frequency_penalty=frequency_penalty,
                     delete_successful_batch_files=delete_successful_batch_files,
@@ -182,21 +184,28 @@ class Prompter:
         else:
             raise ValueError(f"Unknown backend: {self.backend}")
 
-    def __call__(self, dataset: Optional[Iterable] = None, working_dir: str = None) -> Dataset:
+    def __call__(
+        self,
+        dataset: Optional[Iterable] = None,
+        working_dir: str = None,
+        batch_cancel: bool = False,
+    ) -> Dataset:
         """
         Run completions on a dataset.
 
         Args:
             dataset (Iterable): A dataset consisting of a list of items to apply completions
             working_dir (str): The working directory to save the requests.jsonl, responses.jsonl, and dataset.arrow files.
+            batch_cancel (bool): Whether to cancel batches
         """
-        return self._completions(self._request_processor, dataset, working_dir)
+        return self._completions(self._request_processor, dataset, working_dir, batch_cancel)
 
     def _completions(
         self,
         request_processor: BaseRequestProcessor,
         dataset: Optional[Iterable] = None,
         working_dir: str = None,
+        batch_cancel: bool = False,
     ) -> Dataset:
         """
         Apply structured completions in parallel to a dataset using specified model and
@@ -248,8 +257,8 @@ class Prompter:
                 str(self.backend),
             ]
         )
-
         fingerprint = xxh64(fingerprint_str.encode("utf-8")).hexdigest()
+        logger.debug(f"Curator Cache Fingerprint String: {fingerprint_str}")
         logger.debug(f"Curator Cache Fingerprint: {fingerprint}")
 
         metadata_db_path = os.path.join(curator_cache_dir, "metadata.db")
@@ -278,81 +287,45 @@ class Prompter:
         }
         metadata_db.store_metadata(metadata_dict)
 
-        dataset = request_processor.run(
-            dataset=dataset,
-            working_dir=os.path.join(curator_cache_dir, fingerprint),
-            parse_func_hash=parse_func_hash,
-            prompt_formatter=self.prompt_formatter,
-        )
+        run_cache_dir = os.path.join(curator_cache_dir, fingerprint)
+
+        if batch_cancel:
+            if type(request_processor) != OpenAIBatchRequestProcessor:
+                raise ValueError("batch_cancel can only be used with batch mode")
+
+            dataset = request_processor.cancel_batches(
+                working_dir=run_cache_dir,
+            )
+        else:
+            dataset = request_processor.run(
+                dataset=dataset,
+                working_dir=run_cache_dir,
+                parse_func_hash=parse_func_hash,
+                prompt_formatter=self.prompt_formatter,
+            )
 
         return dataset
 
 
-class PathIndependentPickler(dill.Pickler):
-    """A custom pickler that ensures consistent function serialization across different file paths."""
-
-    def save_code(self, obj):
-        """Override save_code to standardize the file path and line numbers."""
-        # Create a copy of the code object with standardized filename and line number
-        code = types.CodeType(
-            obj.co_argcount,
-            obj.co_posonlyargcount,
-            obj.co_kwonlyargcount,
-            obj.co_nlocals,
-            obj.co_stacksize,
-            obj.co_flags,  # Keep flags as-is to preserve function type information
-            obj.co_code,  # Keep raw bytecode
-            obj.co_consts,
-            tuple(sorted(obj.co_names)),  # Sort names for consistent ordering
-            tuple(sorted(obj.co_varnames)),  # Sort varnames for consistent ordering
-            "<standardized>",  # Standardize filename
-            obj.co_name,
-            1,  # Standardize line number
-            obj.co_lnotab,
-            tuple(sorted(obj.co_freevars)),  # Sort freevars for consistent ordering
-            tuple(sorted(obj.co_cellvars)),  # Sort cellvars for consistent ordering
-        )
-        # Use dill's save_reduce to properly handle the code object
-        self.save_reduce(
-            types.CodeType,
-            args=(
-                code.co_argcount,
-                code.co_posonlyargcount,
-                code.co_kwonlyargcount,
-                code.co_nlocals,
-                code.co_stacksize,
-                code.co_flags,
-                code.co_code,
-                code.co_consts,
-                tuple(sorted(code.co_names)),  # Sort names for consistent ordering
-                tuple(sorted(code.co_varnames)),  # Sort varnames for consistent ordering
-                "<standardized>",
-                code.co_name,
-                1,
-                code.co_lnotab,
-                tuple(sorted(code.co_freevars)),  # Sort freevars for consistent ordering
-                tuple(sorted(code.co_cellvars)),  # Sort cellvars for consistent ordering
-            ),
-            obj=obj,
-        )
-
-
-def _get_function_source(func) -> str:
-    """Get the source code of a function."""
-    if func is None:
-        return ""
-    try:
-        return inspect.getsource(func)
-    except (TypeError, OSError):
-        return ""
-
-
 def _get_function_hash(func) -> str:
-    """Get a consistent hash of a function's essential components."""
+    """Get a hash of a function's source code."""
     if func is None:
         return xxh64("").hexdigest()
 
     file = BytesIO()
-    pickler = PathIndependentPickler(file, recurse=True)
-    pickler.dump(func)
+    Pickler(file, recurse=True).dump(func)
     return xxh64(file.getvalue()).hexdigest()
+
+
+def _get_function_source(func) -> str:
+    """Get the source code of a function.
+
+    Purpose of this function is that during Python interpreter (REPL),
+    `inspect.getsource` will fail with an OSError because functions defined in the
+    interpreter don't have an associated source file. We have to use this wrapper
+    to gracefully handle this case.
+    """
+    try:
+        return inspect.getsource(func)
+    except OSError:
+        return ""
