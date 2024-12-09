@@ -322,7 +322,7 @@ class PathIndependentPickler(dill.Pickler):
             "standardized",  # Standardize filename
             obj.co_name,  # Keep original name for better debugging
             "1",  # Line number must be string
-            int.from_bytes(obj.co_linetable, byteorder='little'),  # Convert bytes to int
+            obj.co_linetable,  # Keep as bytes, just like co_code
             tuple(sorted(obj.co_freevars)),
             tuple(sorted(obj.co_cellvars)),
         )
@@ -360,7 +360,7 @@ def _get_function_hash(func: Optional[Callable]) -> str:
         "standardized",  # Standardize filename
         func.__code__.co_name,  # Keep original name for better debugging
         "1",  # Line number must be string
-        int.from_bytes(func.__code__.co_linetable, byteorder='little'),  # Convert bytes to int
+        func.__code__.co_linetable,  # Keep as bytes, just like co_code
         tuple(sorted(func.__code__.co_freevars)),
         tuple(sorted(func.__code__.co_cellvars)),
     )
