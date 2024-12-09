@@ -7,22 +7,24 @@ from datetime import datetime
 from io import BytesIO
 from typing import Any, Callable, Dict, Iterable, Optional, Type, TypeVar, Union
 
-from datasets.utils._dill import Pickler
 from datasets import Dataset
+from datasets.utils._dill import Pickler
 from pydantic import BaseModel
 from xxhash import xxh64
 
 from bespokelabs.curator.db import MetadataDB
 from bespokelabs.curator.prompter.prompt_formatter import PromptFormatter
-from bespokelabs.curator.request_processor.base_request_processor import BaseRequestProcessor
+from bespokelabs.curator.request_processor.base_request_processor import (
+    BaseRequestProcessor,
+)
+from bespokelabs.curator.request_processor.litellm_online_request_processor import (
+    LiteLLMOnlineRequestProcessor,
+)
 from bespokelabs.curator.request_processor.openai_batch_request_processor import (
     OpenAIBatchRequestProcessor,
 )
 from bespokelabs.curator.request_processor.openai_online_request_processor import (
     OpenAIOnlineRequestProcessor,
-)
-from bespokelabs.curator.request_processor.litellm_online_request_processor import (
-    LiteLLMOnlineRequestProcessor,
 )
 
 _CURATOR_DEFAULT_CACHE_DIR = "~/.cache/curator"
@@ -256,8 +258,10 @@ class Prompter:
             ]
         )
         fingerprint = xxh64(fingerprint_str.encode("utf-8")).hexdigest()
-        logger.debug(f"Curator Cache Fingerprint String: {fingerprint_str}")
-        logger.debug(f"Curator Cache Fingerprint: {fingerprint}")
+        logger.info(f">>>>>> Curator Cache Fingerprint String: {fingerprint_str}")
+        logger.info(f">>>>>> Curator Cache Fingerprint: {fingerprint}")
+        # logger.debug(f"Curator Cache Fingerprint String: {fingerprint_str}")
+        # logger.debug(f"Curator Cache Fingerprint: {fingerprint}")
 
         metadata_db_path = os.path.join(curator_cache_dir, "metadata.db")
         metadata_db = MetadataDB(metadata_db_path)
@@ -287,20 +291,20 @@ class Prompter:
 
         run_cache_dir = os.path.join(curator_cache_dir, fingerprint)
 
-        if batch_cancel:
-            if type(request_processor) != OpenAIBatchRequestProcessor:
-                raise ValueError("batch_cancel can only be used with batch mode")
+        # if batch_cancel:
+        #     if type(request_processor) != OpenAIBatchRequestProcessor:
+        #         raise ValueError("batch_cancel can only be used with batch mode")
 
-            dataset = request_processor.cancel_batches(
-                working_dir=run_cache_dir,
-            )
-        else:
-            dataset = request_processor.run(
-                dataset=dataset,
-                working_dir=run_cache_dir,
-                parse_func_hash=parse_func_hash,
-                prompt_formatter=self.prompt_formatter,
-            )
+        #     dataset = request_processor.cancel_batches(
+        #         working_dir=run_cache_dir,
+        #     )
+        # else:
+        #     dataset = request_processor.run(
+        #         dataset=dataset,
+        #         working_dir=run_cache_dir,
+        #         parse_func_hash=parse_func_hash,
+        #         prompt_formatter=self.prompt_formatter,
+        #     )
 
         return dataset
 
