@@ -344,32 +344,27 @@ class PathIndependentPickler(dill.Pickler):
             # Create a filtered copy of globals that only includes necessary items
             filtered_globals = {}
 
-            # Include globals needed for closure variables and function execution
+            # Get all names that could be used by the function
             required_names = set()
             if obj.__code__.co_freevars:
                 required_names.update(obj.__code__.co_freevars)
             if obj.__code__.co_names:
                 required_names.update(obj.__code__.co_names)
+            if obj.__code__.co_varnames:
+                required_names.update(obj.__code__.co_varnames)
 
-            # Only include required globals with standardized values
+            # Handle module-level variables as pseudo-closures
             for name in required_names:
                 if name in orig_globals:
                     value = orig_globals[name]
-                    # Standardize module-level variables
-                    if isinstance(value, str):
-                        filtered_globals[name] = value
-                    elif isinstance(value, (int, float, bool, type(None))):
+                    # Only include simple types that won't cause pickle issues
+                    if isinstance(value, (str, int, float, bool, type(None))):
                         filtered_globals[name] = value
                     else:
-                        # For other types, just indicate their presence
+                        # For other types, use a stable representation
                         filtered_globals[name] = f"<{type(value).__name__}>"
 
-            # Standardize function attributes
-            obj.__module__ = "<standardized>"
-            obj.__qualname__ = f"<standardized>.{obj.__name__}"
-            obj.__globals__ = filtered_globals
-
-            # Create a standardized code object
+            # Create a standardized code object that treats module variables as closures
             code = types.CodeType(
                 obj.__code__.co_argcount,
                 obj.__code__.co_posonlyargcount,
@@ -382,12 +377,17 @@ class PathIndependentPickler(dill.Pickler):
                 obj.__code__.co_names,
                 obj.__code__.co_varnames,
                 "<standardized>",  # co_filename
-                obj.__name__,  # Use __name__ instead of co_name for consistency
+                obj.__name__,  # Use __name__ for consistency
                 1,  # co_firstlineno
                 bytes([]),  # co_lnotab
-                obj.__code__.co_freevars,
+                obj.__code__.co_freevars + tuple(name for name in required_names if name not in obj.__code__.co_freevars),  # Add module variables as freevars
                 obj.__code__.co_cellvars,
             )
+
+            # Standardize function attributes
+            obj.__module__ = "<standardized>"
+            obj.__qualname__ = f"<standardized>.{obj.__name__}"
+            obj.__globals__ = filtered_globals
             obj.__code__ = code
 
             # Pickle the standardized function
