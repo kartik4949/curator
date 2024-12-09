@@ -299,7 +299,7 @@ class PathIndependentPickler(dill.Pickler):
         for const in obj.co_consts:
             if isinstance(const, (tuple, list, set, frozenset)):
                 # Convert to sorted list for consistent ordering
-                standardized_consts.append(sorted(const))
+                standardized_consts.append(tuple(sorted(const)))
             elif isinstance(const, types.CodeType):
                 # Recursively standardize nested code objects
                 file = BytesIO()
@@ -339,17 +339,34 @@ class PathIndependentPickler(dill.Pickler):
                 code.co_flags,
                 code.co_code,
                 tuple(standardized_consts),  # Use standardized constants
-                tuple(sorted(code.co_names)),  # Sort names for consistent ordering
-                tuple(sorted(code.co_varnames)),  # Sort varnames for consistent ordering
+                tuple(sorted(code.co_names)),
+                tuple(sorted(code.co_varnames)),
                 "<standardized>",
                 code.co_name,
                 1,
                 code.co_lnotab,
-                tuple(sorted(code.co_freevars)),  # Sort freevars for consistent ordering
-                tuple(sorted(code.co_cellvars)),  # Sort cellvars for consistent ordering
+                tuple(sorted(code.co_freevars)),
+                tuple(sorted(code.co_cellvars)),
             ),
             obj=obj,
         )
+
+    def save_function(self, obj, name=None):
+        """Override save_function to standardize function attributes."""
+        # Standardize function attributes
+        obj.__module__ = "<standardized>"
+        obj.__qualname__ = obj.__name__
+
+        # Filter globals to only include essential items
+        filtered_globals = {
+            "__builtins__": obj.__globals__["__builtins__"],
+            "__name__": "<standardized>",
+            "__package__": None,
+        }
+        obj.__globals__.clear()
+        obj.__globals__.update(filtered_globals)
+
+        super().save_function(obj, name)
 
 
 def _get_function_source(func) -> str:
