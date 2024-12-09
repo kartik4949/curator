@@ -297,12 +297,12 @@ class PathIndependentPickler(dill.Pickler):
         self.dispatch[types.FunctionType] = self._save_function
         self.dispatch[types.CodeType] = self._save_code
 
-    def _save_code(self, code):
+    def _save_code(self, obj):
         """Create a standardized copy of the code object."""
         # Create a copy of the code object with standardized filename and line number
         # Standardize constants by converting tuples to lists and sorting where possible
         standardized_consts = []
-        for const in code.co_consts:
+        for const in obj.co_consts:
             if isinstance(const, (tuple, list, set, frozenset)):
                 standardized_consts.append(tuple(sorted(const)))
             elif isinstance(const, types.CodeType):
@@ -315,46 +315,67 @@ class PathIndependentPickler(dill.Pickler):
                 standardized_consts.append(const)
 
         standardized_code = types.CodeType(
-            code.co_argcount,
-            code.co_posonlyargcount,
-            code.co_kwonlyargcount,
-            code.co_nlocals,
-            code.co_stacksize,
-            code.co_flags,
-            code.co_code,
+            obj.co_argcount,
+            obj.co_posonlyargcount,
+            obj.co_kwonlyargcount,
+            obj.co_nlocals,
+            obj.co_stacksize,
+            obj.co_flags,
+            obj.co_code,
             tuple(standardized_consts),
-            tuple(sorted(code.co_names)),
-            tuple(sorted(code.co_varnames)),
+            tuple(sorted(obj.co_names)),
+            tuple(sorted(obj.co_varnames)),
             "<standardized>",  # Standardize filename
-            code.co_name,
+            obj.co_name,
             1,  # Standardize line number
-            code.co_lnotab,
-            tuple(sorted(code.co_freevars)),
-            tuple(sorted(code.co_cellvars)),
+            obj.co_lnotab,
+            tuple(sorted(obj.co_freevars)),
+            tuple(sorted(obj.co_cellvars)),
         )
 
         # Use dill's save method to handle the code object
         dill._dill._save_code(self, standardized_code)
 
-    def _save_function(self, func):
+    def _save_function(self, obj):
         """Create a standardized copy of the function."""
         # Create minimal globals dictionary
         new_globals = {
-            "__builtins__": func.__globals__["__builtins__"],
+            "__builtins__": obj.__globals__["__builtins__"],
             "__name__": "<standardized>",
             "__package__": None,
         }
 
         # Create new function with standardized attributes
         new_func = types.FunctionType(
-            func.__code__,
+            obj.__code__,
             new_globals,
             "<standardized>",  # name
-            func.__defaults__,
-            func.__closure__,
+            obj.__defaults__,
+            obj.__closure__,
         )
         new_func.__module__ = "<standardized>"
         new_func.__qualname__ = new_func.__name__
 
         # Use dill's save method to handle the function
         dill._dill._save_function(self, new_func)
+
+
+def _get_function_source(func) -> str:
+    """Get the source code of a function."""
+    if func is None:
+        return ""
+    try:
+        return inspect.getsource(func)
+    except (TypeError, OSError):
+        return ""
+
+
+def _get_function_hash(func) -> str:
+    """Get a consistent hash of a function's essential components."""
+    if func is None:
+        return xxh64("").hexdigest()
+
+    file = BytesIO()
+    pickler = PathIndependentPickler(file, recurse=True)
+    pickler.dump(func)
+    return xxh64(file.getvalue()).hexdigest()
