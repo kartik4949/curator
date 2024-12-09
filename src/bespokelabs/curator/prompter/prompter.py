@@ -318,7 +318,11 @@ class PathIndependentPickler(dill.Pickler):
 
         # Create new function with standardized attributes
         new_func = types.FunctionType(
-            obj.__code__, new_globals, "standardized_function", obj.__defaults__, obj.__closure__
+            self.save_code(obj.__code__),  # Use our standardized code object
+            new_globals,
+            "standardized_function",
+            obj.__defaults__,
+            obj.__closure__,
         )
         new_func.__module__ = "standardized_module"
         new_func.__qualname__ = new_func.__name__
@@ -327,29 +331,26 @@ class PathIndependentPickler(dill.Pickler):
 
     def save_code(self, obj):
         """Override save_code to standardize code objects."""
+        # Create a standardized code object with sorted attributes
         standardized_code = types.CodeType(
             obj.co_argcount,
             obj.co_posonlyargcount,
             obj.co_kwonlyargcount,
             obj.co_nlocals,
             obj.co_stacksize,
-            obj.co_flags,
+            obj.co_flags & ~0b111111111111111,  # Clear position-dependent flags
             obj.co_code,
-            tuple(
-                sorted(obj.co_consts)
-                if isinstance(obj.co_consts, (set, frozenset))
-                else obj.co_consts
-            ),
+            tuple(sorted(obj.co_consts) if isinstance(obj.co_consts, (tuple, set, frozenset)) else obj.co_consts),
             tuple(sorted(obj.co_names)),
             tuple(sorted(obj.co_varnames)),
-            "standardized",
-            obj.co_name,
-            1,
+            "standardized",  # Standardize filename
+            "standardized_function",  # Standardize function name
+            1,  # Standardize first line number
             obj.co_lnotab,
             tuple(sorted(obj.co_freevars)),
             tuple(sorted(obj.co_cellvars)),
         )
-        super().save(standardized_code)
+        return standardized_code
 
 
 def _get_function_source(func: Callable) -> str:
