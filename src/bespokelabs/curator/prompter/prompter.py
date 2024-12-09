@@ -291,82 +291,72 @@ class Prompter:
 class PathIndependentPickler(dill.Pickler):
     """A custom pickler that ensures consistent function serialization across different file paths."""
 
-    def save_code(self, obj):
-        """Override save_code to standardize the file path and line numbers."""
-        # Create a copy of the code object with standardized filename and line number
-        # Standardize constants by converting tuples to lists and sorting where possible
+    def __init__(self, file, **kwargs):
+        super().__init__(file, **kwargs)
+        # Add custom reducers to the dispatch table
+        self.dispatch_table[types.FunctionType] = self._reduce_function
+        self.dispatch_table[types.CodeType] = self._reduce_code
+
+    def _reduce_code(self, obj):
+        """Create a standardized copy of the code object."""
         standardized_consts = []
         for const in obj.co_consts:
             if isinstance(const, (tuple, list, set, frozenset)):
-                # Convert to sorted list for consistent ordering
                 standardized_consts.append(tuple(sorted(const)))
             elif isinstance(const, types.CodeType):
                 # Recursively standardize nested code objects
                 file = BytesIO()
                 pickler = PathIndependentPickler(file, recurse=True)
-                pickler.save_code(const)
+                pickler.dump(const)
                 standardized_consts.append(file.getvalue())
             else:
                 standardized_consts.append(const)
 
-        code = types.CodeType(
+        return types.CodeType, (
             obj.co_argcount,
             obj.co_posonlyargcount,
             obj.co_kwonlyargcount,
             obj.co_nlocals,
             obj.co_stacksize,
-            obj.co_flags,  # Keep flags as-is to preserve function type information
-            obj.co_code,  # Keep raw bytecode
-            tuple(standardized_consts),  # Use standardized constants
-            tuple(sorted(obj.co_names)),  # Sort names for consistent ordering
-            tuple(sorted(obj.co_varnames)),  # Sort varnames for consistent ordering
+            obj.co_flags,
+            obj.co_code,
+            tuple(standardized_consts),
+            tuple(sorted(obj.co_names)),
+            tuple(sorted(obj.co_varnames)),
             "<standardized>",  # Standardize filename
             obj.co_name,
             1,  # Standardize line number
             obj.co_lnotab,
-            tuple(sorted(obj.co_freevars)),  # Sort freevars for consistent ordering
-            tuple(sorted(obj.co_cellvars)),  # Sort cellvars for consistent ordering
-        )
-        # Use dill's save_reduce to properly handle the code object
-        self.save_reduce(
-            types.CodeType,
-            args=(
-                code.co_argcount,
-                code.co_posonlyargcount,
-                code.co_kwonlyargcount,
-                code.co_nlocals,
-                code.co_stacksize,
-                code.co_flags,
-                code.co_code,
-                tuple(standardized_consts),  # Use standardized constants
-                tuple(sorted(code.co_names)),
-                tuple(sorted(code.co_varnames)),
-                "<standardized>",
-                code.co_name,
-                1,
-                code.co_lnotab,
-                tuple(sorted(code.co_freevars)),
-                tuple(sorted(code.co_cellvars)),
-            ),
-            obj=obj,
+            tuple(sorted(obj.co_freevars)),
+            tuple(sorted(obj.co_cellvars)),
         )
 
-    def save_function(self, obj, name=None):
-        """Override save_function to standardize function attributes."""
-        # Standardize function attributes
-        obj.__module__ = "<standardized>"
-        obj.__qualname__ = obj.__name__
+    def _reduce_function(self, obj):
+        """Create a standardized copy of the function."""
+        # Create a copy of the function with standardized attributes
+        code = self._reduce_code(obj.__code__)[1]
+        new_code = types.CodeType(*code)
 
-        # Filter globals to only include essential items
-        filtered_globals = {
+        # Create minimal globals dictionary
+        new_globals = {
             "__builtins__": obj.__globals__["__builtins__"],
             "__name__": "<standardized>",
             "__package__": None,
         }
-        obj.__globals__.clear()
-        obj.__globals__.update(filtered_globals)
 
-        super().save_function(obj, name)
+        # Create new function with standardized attributes
+        new_func = types.FunctionType(
+            new_code,
+            new_globals,
+            "<standardized>",  # name
+            obj.__defaults__,
+            obj.__closure__,
+        )
+        new_func.__module__ = "<standardized>"
+        new_func.__qualname__ = new_func.__name__
+
+        # Use dill's standard function reducer on our standardized function
+        return dill._dill._function_reduce(new_func)
 
 
 def _get_function_source(func) -> str:
