@@ -131,7 +131,6 @@ class StatusTracker:
         """Update the rich progress display with current statistics."""
         if not self.progress or self.task_id is None:
             return
-        print("I'm here")
         # Calculate averages and stats
         avg_prompt = self.total_prompt_tokens / max(1, self.num_tasks_succeeded)
         avg_completion = self.total_completion_tokens / max(1, self.num_tasks_succeeded)
