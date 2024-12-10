@@ -18,7 +18,7 @@ from bespokelabs.curator.prompter.prompt_formatter import PromptFormatter
 
 logger = logging.getLogger(__name__)
 
-litellm.suppress_debug_info = True
+# litellm.suppress_debug_info = True
 
 
 class LiteLLMOnlineRequestProcessor(BaseOnlineRequestProcessor):
@@ -158,8 +158,11 @@ class LiteLLMOnlineRequestProcessor(BaseOnlineRequestProcessor):
         headers = completion._hidden_params.get("additional_headers", {})
         logger.info(f"Rate limit headers: {headers}")
 
-        rpm = int(headers.get("x-ratelimit-limit-requests", 3000))
-        tpm = int(headers.get("x-ratelimit-limit-tokens", 150_000))
+        rpm = int(3000 )
+        tpm = int(4_000_000)
+        
+        # rpm = int(headers.get("x-ratelimit-limit-requests", 3000 * 1e16))
+        # tpm = int(headers.get("x-ratelimit-limit-tokens", 4_000_000 * 1e6))
 
         logger.info(f"Rate limits - Requests/min: {rpm}, Tokens/min: {tpm}")
 
@@ -222,19 +225,24 @@ class LiteLLMOnlineRequestProcessor(BaseOnlineRequestProcessor):
             GenericResponse: The response from LiteLLM
         """
         # Get response directly without extra logging
+        print("Processing request: ", request.task_id)
         if request.generic_request.response_format:
             response, completion_obj = await self.client.chat.completions.create_with_completion(
                 **request.api_specific_request,
                 response_model=request.prompt_formatter.response_format,
-                timeout=60.0,
+                timeout=60.0,   
             )
             response_message = (
                 response.model_dump() if hasattr(response, "model_dump") else response
             )
+            print(response, completion_obj)
         else:
             completion_obj = await litellm.acompletion(**request.api_specific_request, timeout=60.0)
             response_message = completion_obj["choices"][0]["message"]["content"]
-
+            hidden_params = completion_obj._hidden_params
+            # print(completion_obj)
+            # print(hidden_params)
+            # print(datetime.datetime.now() - request.created_at)
         # Extract token usage
         usage = completion_obj.usage if hasattr(completion_obj, "usage") else {}
         token_usage = TokenUsage(
@@ -242,6 +250,7 @@ class LiteLLMOnlineRequestProcessor(BaseOnlineRequestProcessor):
             completion_tokens=usage.completion_tokens,
             total_tokens=usage.total_tokens,
         )
+        # print(token_usage)
 
         # Calculate cost using litellm
         try:

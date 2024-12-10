@@ -280,49 +280,50 @@ class BaseOnlineRequestProcessor(BaseRequestProcessor, ABC):
 
         # Use higher connector limit for better throughput
         connector = aiohttp.TCPConnector(limit=10 * rpm)
-        async with aiohttp.ClientSession(
-            connector=connector
-        ) as session:  # Initialize ClientSession here
-            async with aiofiles.open(generic_request_filepath) as file:
-                pending_requests = []
 
-                async for line in file:
-                    generic_request = GenericRequest.model_validate_json(line)
+        # Read all requests at once
+        async with aiofiles.open(generic_request_filepath) as file:
+            content = await file.read()
+        all_requests = [GenericRequest.model_validate_json(line) for line in content.splitlines()]
+        
+        async with aiohttp.ClientSession(connector=connector) as session:
+            pending_requests = []
 
-                    if resume and generic_request.original_row_idx in completed_request_ids:
-                        status_tracker.num_tasks_already_completed += 1
-                        continue
+            for generic_request in all_requests:
+                if resume and generic_request.original_row_idx in completed_request_ids:
+                    status_tracker.num_tasks_already_completed += 1
+                    continue
 
-                    request = APIRequest(
-                        task_id=status_tracker.num_tasks_started,
-                        generic_request=generic_request,
-                        api_specific_request=self.create_api_specific_request(generic_request),
-                        attempts_left=max_attempts,
-                        prompt_formatter=self.prompt_formatter,
+                request = APIRequest(
+                    task_id=status_tracker.num_tasks_started,
+                    generic_request=generic_request,
+                    api_specific_request=self.create_api_specific_request(generic_request),
+                    attempts_left=max_attempts,
+                    prompt_formatter=self.prompt_formatter,
+                )
+
+                token_estimate = self.estimate_total_tokens(request.generic_request.messages)
+
+                # Wait for capacity if needed
+                while not status_tracker.has_capacity(token_estimate):
+                    await asyncio.sleep(0.1)
+
+                # Consume capacity before making request
+                status_tracker.consume_capacity(token_estimate)
+
+                task = asyncio.create_task(
+                    self.handle_single_request_with_retries(
+                        request=request,
+                        session=session,
+                        retry_queue=queue_of_requests_to_retry,
+                        save_filepath=save_filepath,
+                        status_tracker=status_tracker,
                     )
+                )
+                pending_requests.append(task)
 
-                    token_estimate = self.estimate_total_tokens(request.generic_request.messages)
-
-                    # Wait for capacity if needed
-                    while not status_tracker.has_capacity(token_estimate):
-                        await asyncio.sleep(0.1)
-
-                    # Consume capacity before making request
-                    status_tracker.consume_capacity(token_estimate)
-
-                    task = asyncio.create_task(
-                        self.handle_single_request_with_retries(
-                            request=request,
-                            session=session,
-                            retry_queue=queue_of_requests_to_retry,
-                            save_filepath=save_filepath,
-                            status_tracker=status_tracker,
-                        )
-                    )
-                    pending_requests.append(task)
-
-                    status_tracker.num_tasks_started += 1
-                    status_tracker.num_tasks_in_progress += 1
+                status_tracker.num_tasks_started += 1
+                status_tracker.num_tasks_in_progress += 1
 
             # Wait for all tasks to complete
             if pending_requests:
