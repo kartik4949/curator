@@ -34,6 +34,7 @@ from rich import box
 from rich.panel import Panel
 from rich.layout import Layout
 from rich.live import Live
+from litellm import model_cost
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -45,7 +46,7 @@ DEFAULT_TOKENS_PER_MINUTE = 1_000
 @dataclass
 class StatusTracker:
     """Tracks the status of all requests."""
-
+    model: str = field(default=None, init=False)
     num_tasks_started: int = 0
     num_tasks_in_progress: int = 0
     num_tasks_succeeded: int = 0
@@ -71,6 +72,10 @@ class StatusTracker:
     total_completion_tokens: int = 0
     total_tokens: int = 0
     total_cost: float = 0
+    
+    # Add new fields for cost per million tokens
+    input_cost_per_million: float = 0
+    output_cost_per_million: float = 0
 
     def __post_init__(self):
         """Initialize the rich progress display."""
@@ -86,7 +91,10 @@ class StatusTracker:
             TextColumn(
                 "{task.fields[status_text]}\n"
                 "{task.fields[token_text]}\n"
-                "{task.fields[cost_text]}",
+                "{task.fields[cost_text]}\n"
+                "{task.fields[model_name_text]}\n"
+                "{task.fields[rate_limit_text]}\n"
+                "{task.fields[price_text]}",
                 justify="left",
             ),
             expand=True,
@@ -105,13 +113,21 @@ class StatusTracker:
         
     def initialize_progress(self, total_requests: int, processor_name: str):
         """Initialize the progress bar with total requests."""
+        # Initialize cost rates here, after model has been set
+        if self.model in model_cost:
+            self.input_cost_per_million = model_cost[self.model]['input_cost_per_token'] * 1_000_000
+            self.output_cost_per_million = model_cost[self.model]['output_cost_per_token'] * 1_000_000
+        
         self.task_id = self.progress.add_task(
             description=f"[cyan]{processor_name}",
             total=total_requests,
             completed=0,
             status_text="[bold white]Status:[/bold white] [dim]Initializing...[/dim]",
             token_text="[bold white]Tokens:[/bold white] --",
-            cost_text="[bold white]Cost:[/bold white] --"
+            cost_text="[bold white]Cost:[/bold white] --",
+            model_name_text="[bold white]Model:[/bold white] --",
+            rate_limit_text="[bold white]Rate Limits:[/bold white] --",
+            price_text="[bold white]Model Pricing:[/bold white] --"
         )
 
     def update_stats(self, token_usage: TokenUsage, cost: float):
@@ -157,9 +173,21 @@ class StatusTracker:
 
         cost_text = (
             "[bold white]Cost:[/bold white] "
-            f"Current: [magenta]${self.total_cost:.2f}[/magenta] • "
-            f"Projected: [magenta]${projected_cost:.2f}[/magenta] • "
-            f"Rate: [magenta]${cost_per_hour:.2f}/hr[/magenta]"
+            f"Current: [magenta]${self.total_cost:.3f}[/magenta] • "
+            f"Projected: [magenta]${projected_cost:.3f}[/magenta] • "
+            f"Rate: [magenta]${cost_per_hour:.3f}/hr[/magenta] • "
+        )
+        model_name_text = (
+            f"[bold white]Model:[/bold white] [blue]{self.model}[/blue]"
+        )
+        rate_limit_text = (
+            f"[bold white]Rate Limits:[/bold white] "
+            f"rpm: [blue]{self.max_requests_per_minute}[/blue] • "
+            f"tpm: [blue]{self.max_tokens_per_minute}[/blue]"
+        )
+        price_text = (
+            "[bold white]Model Pricing:[/bold white] "
+            f"Per 1M tokens: Input: [red]${self.input_cost_per_million:.3f}[/red] • Output: [red]${self.output_cost_per_million:.3f}[/red]"
         )
 
         self.progress.update(
@@ -168,7 +196,10 @@ class StatusTracker:
             completed=self.num_tasks_succeeded,
             status_text=status_text,
             token_text=token_text,
-            cost_text=cost_text
+            cost_text=cost_text,
+            model_name_text=model_name_text,
+            rate_limit_text=rate_limit_text,
+            price_text=price_text,
         )
 
     def __del__(self):
@@ -205,8 +236,8 @@ class StatusTracker:
             table.add_row("Costs", "", style="bold magenta")
             table.add_row("Total Cost", f"${self.total_cost:.4f}")
             table.add_row("Average Cost per Request", f"${self.total_cost / max(1, self.num_tasks_succeeded):.4f}")
-            table.add_row("Cost per 1M Tokens", f"${(self.total_cost / max(0.001, self.total_tokens)) * 1000000:.4f}")
-            
+            table.add_row("Input Cost per 1M Tokens", f"${self.input_cost_per_million:.4f}")
+            table.add_row("Output Cost per 1M Tokens", f"${self.output_cost_per_million:.4f}")            
             self.console.print(table)
 
     def __str__(self):
@@ -268,7 +299,10 @@ class StatusTracker:
             self.task_id,
             status_text=f"[bold red]Error:[/bold red] {error_message}",
             token_text="[dim]Process failed[/dim]",
-            cost_text="[dim]Process failed[/dim]"
+            cost_text="[dim]Process failed[/dim]",
+            model_name_text="[dim]Process failed[/dim]",
+            rate_limit_text="[dim]Process failed[/dim]",
+            price_text="[dim]Process failed[/dim]"
         )
 
 
@@ -404,6 +438,7 @@ class BaseOnlineRequestProcessor(BaseRequestProcessor, ABC):
         """Processes API requests in parallel, throttling to stay under rate limits."""
         # Initialize trackers
         status_tracker = StatusTracker()
+        status_tracker.model = self.model
         try:
             # Count total requests
             total_requests = sum(1 for _ in open(generic_request_filepath))
@@ -512,6 +547,8 @@ class BaseOnlineRequestProcessor(BaseRequestProcessor, ABC):
 
                         if resume and generic_request.original_row_idx in completed_request_ids:
                             status_tracker.num_tasks_already_completed += 1
+                            status_tracker.num_tasks_succeeded += 1
+                            status_tracker.update_progress_display()
                             continue
 
                         request = APIRequest(
