@@ -75,7 +75,7 @@ class StatusTracker:
     def __post_init__(self):
         """Initialize the rich progress display."""
         # Create the progress display
-        progress_columns = [
+        self.progress = Progress(
             TextColumn("[bold blue]{task.description}"),
             BarColumn(bar_width=50),
             TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
@@ -83,15 +83,12 @@ class StatusTracker:
             TimeElapsedColumn(),
             TextColumn("[bold white]•[/bold white]"),
             TimeRemainingColumn(),
-        ]
-
-        # Create separate tables for each section
-        self.progress = Progress(
-            *progress_columns,
-            TextColumn("\n"),
-            TextColumn("{task.fields[status_text]}\n"),
-            TextColumn("{task.fields[token_text]}\n"),
-            TextColumn("{task.fields[cost_text]}"),
+            TextColumn(
+                "{task.fields[status_text]}\n"
+                "{task.fields[token_text]}\n"
+                "{task.fields[cost_text]}",
+                justify="left",
+            ),
             expand=True,
             refresh_per_second=1,
         )
@@ -186,14 +183,29 @@ class StatusTracker:
             
             # Create final statistics table
             table = Table(title="Final Curator Statistics", box=box.ROUNDED)
-            table.add_column("Metric", style="cyan")
+            table.add_column("Section/Metric", style="cyan")
             table.add_column("Value", style="yellow")
             
-            table.add_row("Total Requests Processed", str(self.num_tasks_succeeded + self.num_tasks_failed))
-            table.add_row("Successful Requests", f"[green]{self.num_tasks_succeeded}[/green]")
-            table.add_row("Failed Requests", f"[red]{self.num_tasks_failed}[/red]")
+            # Request Statistics
+            table.add_row("Requests", "", style="bold magenta")
+            table.add_row("Total Processed", str(self.num_tasks_succeeded + self.num_tasks_failed))
+            table.add_row("Successful", f"[green]{self.num_tasks_succeeded}[/green]")
+            table.add_row("Failed", f"[red]{self.num_tasks_failed}[/red]")
+            
+            # Token Statistics
+            table.add_row("Tokens", "", style="bold magenta") 
+            table.add_row("Total Tokens Used", f"{self.total_tokens:,}")
+            table.add_row("Total Prompt Tokens", f"{self.total_prompt_tokens:,}")
+            table.add_row("Total Completion Tokens", f"{self.total_completion_tokens:,}")
             table.add_row("Average Tokens per Request", f"{self.total_tokens / max(1, self.num_tasks_succeeded):.1f}")
-            table.add_row("Total Cost", f"${self.total_cost:.2f}")
+            table.add_row("Average Prompt Tokens", f"{self.total_prompt_tokens / max(1, self.num_tasks_succeeded):.1f}")
+            table.add_row("Average Completion Tokens", f"{self.total_completion_tokens / max(1, self.num_tasks_succeeded):.1f}")
+            
+            # Cost Statistics
+            table.add_row("Costs", "", style="bold magenta")
+            table.add_row("Total Cost", f"${self.total_cost:.4f}")
+            table.add_row("Average Cost per Request", f"${self.total_cost / max(1, self.num_tasks_succeeded):.4f}")
+            table.add_row("Cost per 1M Tokens", f"${(self.total_cost / max(0.001, self.total_tokens)) * 1000000:.4f}")
             
             self.console.print(table)
 
@@ -390,11 +402,9 @@ class BaseOnlineRequestProcessor(BaseRequestProcessor, ABC):
         resume_no_retry: bool = False,
     ) -> None:
         """Processes API requests in parallel, throttling to stay under rate limits."""
-
+        # Initialize trackers
+        status_tracker = StatusTracker()
         try:
-            # Initialize trackers
-            status_tracker = StatusTracker()
-            
             # Count total requests
             total_requests = sum(1 for _ in open(generic_request_filepath))
             
@@ -485,6 +495,9 @@ class BaseOnlineRequestProcessor(BaseRequestProcessor, ABC):
                     if user_input.lower() not in ["y", ""]:
                         logger.info("Aborting operation.")
                         return
+
+            # Initialize retry queue
+            queue_of_requests_to_retry = asyncio.Queue()
 
             # Use higher connector limit for better throughput
             connector = aiohttp.TCPConnector(limit=10 * status_tracker.max_requests_per_minute)
