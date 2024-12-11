@@ -35,12 +35,22 @@ from rich.panel import Panel
 from rich.layout import Layout
 from rich.live import Live
 from litellm import model_cost
+from rich.logging import RichHandler
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
 
 DEFAULT_REQUESTS_PER_MINUTE = 10
 DEFAULT_TOKENS_PER_MINUTE = 1_000
+
+# Create a shared console instance
+console = Console()
+
+# Update the logger configuration
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    handlers=[RichHandler(console=console, rich_tracebacks=True)]
+)
 
 
 @dataclass
@@ -73,13 +83,18 @@ class StatusTracker:
     total_tokens: int = 0
     total_cost: float = 0
     
-    # Add new fields for cost per million tokens
-    input_cost_per_million: float = 0
-    output_cost_per_million: float = 0
+    # Cost per million tokens
+    input_cost_per_million: Optional[float] = None
+    output_cost_per_million: Optional[float] = None
+
+    start_time: float = field(default_factory=time.time, init=False)
 
     def __post_init__(self):
         """Initialize the rich progress display."""
-        # Create the progress display
+        # Use the shared console
+        self.console = console
+        
+        # Create the progress display with console
         self.progress = Progress(
             TextColumn("[bold blue]{task.description}"),
             BarColumn(bar_width=50),
@@ -89,16 +104,17 @@ class StatusTracker:
             TextColumn("[bold white]•[/bold white]"),
             TimeRemainingColumn(),
             TextColumn(
+                "{task.fields[model_name_text]}\n"
                 "{task.fields[status_text]}\n"
                 "{task.fields[token_text]}\n"
                 "{task.fields[cost_text]}\n"
-                "{task.fields[model_name_text]}\n"
                 "{task.fields[rate_limit_text]}\n"
                 "{task.fields[price_text]}",
                 justify="left",
             ),
             expand=True,
             refresh_per_second=1,
+            console=self.console  # Use the shared console
         )
         
         self.task_id = None
@@ -166,16 +182,14 @@ class StatusTracker:
         token_text = (
             "[bold white]Tokens:[/bold white] "
             f"Avg Input: [blue]{avg_prompt:.0f}[/blue] • "
-            f"Avg Output: [blue]{avg_completion:.0f}[/blue] • "
-            f"Total: [blue]{avg_total:.0f}[/blue] • "
-            f"Cumulative: [blue]{self.total_tokens:,}[/blue]"
+            f"Avg Output: [blue]{avg_completion:.0f}[/blue]"
         )
 
         cost_text = (
             "[bold white]Cost:[/bold white] "
             f"Current: [magenta]${self.total_cost:.3f}[/magenta] • "
             f"Projected: [magenta]${projected_cost:.3f}[/magenta] • "
-            f"Rate: [magenta]${cost_per_hour:.3f}/hr[/magenta] • "
+            f"Rate: [magenta]${cost_per_hour:.3f}/hr[/magenta]"
         )
         model_name_text = (
             f"[bold white]Model:[/bold white] [blue]{self.model}[/blue]"
@@ -185,9 +199,12 @@ class StatusTracker:
             f"rpm: [blue]{self.max_requests_per_minute}[/blue] • "
             f"tpm: [blue]{self.max_tokens_per_minute}[/blue]"
         )
+        input_cost_str = f"${self.input_cost_per_million:.3f}" if isinstance(self.input_cost_per_million, float) else 'N/A'
+        output_cost_str = f"${self.output_cost_per_million:.3f}" if isinstance(self.output_cost_per_million, float) else 'N/A'
+        
         price_text = (
             "[bold white]Model Pricing:[/bold white] "
-            f"Per 1M tokens: Input: [red]${self.input_cost_per_million:.3f}[/red] • Output: [red]${self.output_cost_per_million:.3f}[/red]"
+            f"Per 1M tokens: Input: [red]{input_cost_str}[/red] • Output: [red]{output_cost_str}[/red]"
         )
 
         self.progress.update(
@@ -217,6 +234,12 @@ class StatusTracker:
             table.add_column("Section/Metric", style="cyan")
             table.add_column("Value", style="yellow")
             
+            # Model Information
+            table.add_row("Model", "", style="bold magenta")
+            table.add_row("Name", f"[blue]{self.model}[/blue]")
+            table.add_row("Rate Limit (RPM)", f"[blue]{self.max_requests_per_minute}[/blue]")
+            table.add_row("Rate Limit (TPM)", f"[blue]{self.max_tokens_per_minute}[/blue]")
+            
             # Request Statistics
             table.add_row("Requests", "", style="bold magenta")
             table.add_row("Total Processed", str(self.num_tasks_succeeded + self.num_tasks_failed))
@@ -234,10 +257,18 @@ class StatusTracker:
             
             # Cost Statistics
             table.add_row("Costs", "", style="bold magenta")
-            table.add_row("Total Cost", f"${self.total_cost:.4f}")
-            table.add_row("Average Cost per Request", f"${self.total_cost / max(1, self.num_tasks_succeeded):.4f}")
-            table.add_row("Input Cost per 1M Tokens", f"${self.input_cost_per_million:.4f}")
-            table.add_row("Output Cost per 1M Tokens", f"${self.output_cost_per_million:.4f}")            
+            table.add_row("Total Cost", f"[red]${self.total_cost:.4f}[/red]")
+            table.add_row("Average Cost per Request", f"[red]${self.total_cost / max(1, self.num_tasks_succeeded):.4f}[/red]")
+            table.add_row("Input Cost per 1M Tokens", f"[red]${self.input_cost_per_million:.4f}[/red]")
+            table.add_row("Output Cost per 1M Tokens", f"[red]${self.output_cost_per_million:.4f}[/red]")
+            
+            # Performance Statistics
+            table.add_row("Performance", "", style="bold magenta")
+            elapsed_time = time.time() - self.start_time
+            cost_per_hour = (self.total_cost / max(1, elapsed_time)) * 3600
+            table.add_row("Total Time", f"{elapsed_time:.1f} seconds")
+            table.add_row("Cost per Hour", f"[magenta]${cost_per_hour:.3f}[/magenta]")
+            
             self.console.print(table)
 
     def __str__(self):
