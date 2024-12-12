@@ -39,8 +39,8 @@ class Poems(BaseModel):
     poems_list: List[Poem] = Field(description="A list of poems.")
 
 
-# We define a Prompter that generates poems which gets applied to the topics dataset.
-poet = curator.Prompter(
+# We define an LLM object that generates poems which gets applied to the topics dataset.
+poet = curator.LLM(
     # prompt_func takes a row of the dataset as input.
     # row is a dictionary with a single key 'topic' in this case.
     prompt_func=lambda row: f"Write two poems about {row['topic']}.",

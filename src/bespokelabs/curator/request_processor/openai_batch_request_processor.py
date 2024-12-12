@@ -13,7 +13,7 @@ from openai.types import Batch
 from tqdm import tqdm
 
 from bespokelabs.curator.dataset import Dataset
-from bespokelabs.curator.prompter.prompt_formatter import PromptFormatter
+from bespokelabs.curator.llm.prompt_formatter import PromptFormatter
 from bespokelabs.curator.request_processor.base_request_processor import (
     BaseRequestProcessor,
     GenericRequest,

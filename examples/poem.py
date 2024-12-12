@@ -17,7 +17,7 @@ class Topics(BaseModel):
 
 
 # We define a prompter that generates topics.
-topic_generator = curator.Prompter(
+topic_generator = curator.LLM(
     prompt_func=lambda: "Generate 10 diverse topics that are suitable for writing poems about.",
     model_name="gpt-4o-mini",
     response_format=Topics,
@@ -35,8 +35,8 @@ class Poems(BaseModel):
     poems_list: List[str] = Field(description="A list of poems.")
 
 
-# We define a prompter that generates poems which gets applied to the topics dataset.
-poet = curator.Prompter(
+# We define an `LLM` object that generates poems which gets applied to the topics dataset.
+poet = curator.LLM(
     # The prompt_func takes a row of the dataset as input.
     # The row is a dictionary with a single key 'topic' in this case.
     prompt_func=lambda row: f"Write two poems about {row['topic']}.",

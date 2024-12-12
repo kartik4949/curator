@@ -1,6 +1,5 @@
 import logging
 from typing import Optional
-import asyncio
 import aiohttp
 import litellm
 from litellm import get_supported_openai_params
@@ -14,7 +13,6 @@ from bespokelabs.curator.request_processor.base_online_request_processor import 
 from bespokelabs.curator.request_processor.generic_request import GenericRequest
 from bespokelabs.curator.request_processor.generic_response import TokenUsage, GenericResponse
 from pydantic import BaseModel
-from bespokelabs.curator.prompter.prompt_formatter import PromptFormatter
 
 logger = logging.getLogger(__name__)
 

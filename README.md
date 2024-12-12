@@ -74,8 +74,8 @@ class Poems(BaseModel):
     poems_list: List[Poem] = Field(description="A list of poems.")
 
 
-# We define a Prompter that generates poems which gets applied to the topics dataset.
-poet = curator.Prompter(
+# We define an `LLM` object that generates poems which gets applied to the topics dataset.
+poet = curator.LLM(
     # `prompt_func` takes a row of the dataset as input.
     # `row` is a dictionary with a single key 'topic' in this case.
     prompt_func=lambda row: f"Write two poems about {row['topic']}.",
@@ -97,7 +97,7 @@ print(poem.to_pandas())
 # 2  Beauty of Bespoke Labs's Curator library  In whispers of design and crafted grace,\nBesp...
 # 3  Beauty of Bespoke Labs's Curator library  In the hushed breath of parchment and ink,\nBe...
 ```
-Note that `topics` can be created with `curator.Prompter` as well,
+Note that `topics` can be created with `curator.LLM` as well,
 and we can scale this up to create tens of thousands of diverse poems.
 You can see a more detailed example in the [examples/poem.py](https://github.com/bespokelabsai/curator/blob/mahesh/update_doc/examples/poem.py) file,
 and other examples in the [examples](https://github.com/bespokelabsai/curator/blob/mahesh/update_doc/examples) directory.

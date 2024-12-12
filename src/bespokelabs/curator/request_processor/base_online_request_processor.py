@@ -13,7 +13,7 @@ import resource
 
 from bespokelabs.curator.dataset import Dataset
 from bespokelabs.curator.request_processor.base_request_processor import BaseRequestProcessor
-from bespokelabs.curator.prompter.prompter import PromptFormatter
+from bespokelabs.curator.llm.prompt_formatter import PromptFormatter
 from bespokelabs.curator.request_processor.generic_request import GenericRequest
 from bespokelabs.curator.request_processor.event_loop import run_in_event_loop
 from bespokelabs.curator.request_processor.generic_response import GenericResponse, TokenUsage
@@ -39,8 +39,8 @@ from rich.logging import RichHandler
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_REQUESTS_PER_MINUTE = 10
-DEFAULT_TOKENS_PER_MINUTE = 1_000
+DEFAULT_REQUESTS_PER_MINUTE = 100
+DEFAULT_TOKENS_PER_MINUTE = 100_000
 
 # Create a shared console instance
 console = Console()
