@@ -94,16 +94,10 @@ class StatusTracker:
         # Use the shared console
         self.console = console
         
-        # Create the progress display with console
+        # Create a single Progress instance with both displays in a table-friendly format
         self.progress = Progress(
-            TextColumn("[bold blue]{task.description}"),
-            BarColumn(bar_width=50),
-            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
-            TextColumn("[bold white]•[/bold white]"),
-            TimeElapsedColumn(),
-            TextColumn("[bold white]•[/bold white]"),
-            TimeRemainingColumn(),
             TextColumn(
+                "[cyan]{task.description}[/cyan]\n"
                 "{task.fields[model_name_text]}\n"
                 "{task.fields[status_text]}\n"
                 "{task.fields[token_text]}\n"
@@ -112,9 +106,15 @@ class StatusTracker:
                 "{task.fields[price_text]}",
                 justify="left",
             ),
+            TextColumn("\n\n\n\n\n\n"),  # Spacer
+            BarColumn(),
+            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+            TextColumn("[bold white]•[/bold white]"),
+            TimeElapsedColumn(),
+            TextColumn("[bold white]•[/bold white]"),
+            TimeRemainingColumn(),
             expand=True,
-            refresh_per_second=1,
-            console=self.console  # Use the shared console
+            console=self.console
         )
         
         self.task_id = None
@@ -160,6 +160,7 @@ class StatusTracker:
         """Update the rich progress display with current statistics."""
         if not self.progress or self.task_id is None:
             return
+            
         # Calculate averages and stats
         avg_prompt = self.total_prompt_tokens / max(1, self.num_tasks_succeeded)
         avg_completion = self.total_completion_tokens / max(1, self.num_tasks_succeeded)
@@ -207,6 +208,7 @@ class StatusTracker:
             f"Per 1M tokens: Input: [red]{input_cost_str}[/red] • Output: [red]{output_cost_str}[/red]"
         )
 
+        # Update the progress display
         self.progress.update(
             self.task_id,
             advance=1,
@@ -220,13 +222,13 @@ class StatusTracker:
         )
 
     def __del__(self):
-        """Ensure progress bar is stopped on deletion."""
-        if self.progress:
+        """Ensure progress is stopped on deletion."""
+        if hasattr(self, 'progress'):
             self.progress.stop()
 
     def stop(self):
         """Stop the progress display and show final statistics."""
-        if self.progress:
+        if hasattr(self, 'progress'):
             self.progress.stop()
             
             # Create final statistics table
