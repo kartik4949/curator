@@ -847,9 +847,6 @@ class BatchManager:
                     batch_object = Batch.model_validate(json.loads(line))
                     request_file = batch_object.metadata["request_file_name"]
                     response_file = request_file_to_response_file(request_file, self.working_dir)
-                    assert (
-                        request_file in self.tracker.unsubmitted_request_files
-                    ), f"request_file {request_file} not in unsubmitted_request_files: {self.tracker.unsubmitted_request_files}"
                     if not os.path.exists(response_file):
                         logger.warning(
                             f"Downloaded batch object {batch_object.id} has a response_file {response_file} that does not exist. "
