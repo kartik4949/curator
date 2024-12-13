@@ -35,7 +35,6 @@ from rich.panel import Panel
 from rich.layout import Layout
 from rich.live import Live
 from litellm import model_cost
-from rich.logging import RichHandler
 
 logger = logging.getLogger(__name__)
 
@@ -45,26 +44,53 @@ DEFAULT_TOKENS_PER_MINUTE = 100_000
 # Create a shared console instance
 console = Console()
 
-# Update the logger configuration
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-    handlers=[RichHandler(console=console, rich_tracebacks=True)]
-)
-
-
 @dataclass
 class StatusTracker:
     """Tracks the status of all requests."""
     model: str = field(default=None, init=False)
+    total: int = field(default=0, init=False)
     num_tasks_started: int = 0
     num_tasks_in_progress: int = 0
     num_tasks_succeeded: int = 0
     num_tasks_failed: int = 0
     num_tasks_already_completed: int = 0
+    num_rate_limit_errors: int = 0
     num_api_errors: int = 0
     num_other_errors: int = 0
-    num_rate_limit_errors: int = 0
+    time_of_last_rate_limit_error: float = 0
+    total_cost: float = 0
+    total_tokens: int = 0
+    total_prompt_tokens: int = 0
+    total_completion_tokens: int = 0
+    start_time: float = field(default_factory=time.time)
+    
+    # Add new attributes for averages and performance metrics
+    @property
+    def avg_tokens_per_request(self) -> float:
+        return self.total_tokens / max(self.num_tasks_succeeded, 1)
+    
+    @property
+    def avg_prompt_tokens(self) -> float:
+        return self.total_prompt_tokens / max(self.num_tasks_succeeded, 1)
+    
+    @property
+    def avg_completion_tokens(self) -> float:
+        return self.total_completion_tokens / max(self.num_tasks_succeeded, 1)
+    
+    @property
+    def total_time(self) -> float:
+        return time.time() - self.start_time
+    
+    @property
+    def avg_time_per_request(self) -> float:
+        return self.total_time / max(self.num_tasks_succeeded, 1)
+    
+    @property
+    def requests_per_second(self) -> float:
+        return self.num_tasks_succeeded / max(self.total_time, 0.001)
+
+    model: str = field(default=None, init=False)
+    total: int = field(default=0, init=False)
     available_request_capacity: float = 0
     available_token_capacity: float = 0
     last_update_time: float = field(default_factory=time.time)
@@ -72,9 +98,13 @@ class StatusTracker:
     max_tokens_per_minute: int = 0
     time_of_last_rate_limit_error: float = field(default=None)
     
-    # Rich progress display
-    progress: Progress = field(default=None, init=False)
-    task_id: int = field(default=None, init=False)
+    # Rich display components
+    status_progress: Progress = field(default=None, init=False)
+    progress_bar: Progress = field(default=None, init=False)
+    layout: Layout = field(default=None, init=False)
+    live: Live = field(default=None, init=False)
+    status_task_id: int = field(default=None, init=False)
+    progress_task_id: int = field(default=None, init=False)
     console: Console = field(default_factory=Console, init=False)
     
     # Stats tracking
@@ -90,60 +120,162 @@ class StatusTracker:
     start_time: float = field(default_factory=time.time, init=False)
 
     def __post_init__(self):
-        """Initialize the rich progress display."""
-        # Use the shared console
+        """Initialize the rich display with separate status and progress sections."""
         self.console = console
-        
-        # Create the progress display with console
-        self.progress = Progress(
-            TextColumn("[bold blue]{task.description}"),
-            BarColumn(bar_width=50),
-            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
-            TextColumn("[bold white]•[/bold white]"),
-            TimeElapsedColumn(),
-            TextColumn("[bold white]•[/bold white]"),
-            TimeRemainingColumn(),
+
+        # Create status progress (for model info, tokens, etc)
+        self.status_progress = Progress(
             TextColumn(
                 "{task.fields[model_name_text]}\n"
                 "{task.fields[status_text]}\n"
                 "{task.fields[token_text]}\n"
                 "{task.fields[cost_text]}\n"
                 "{task.fields[rate_limit_text]}\n"
-                "{task.fields[price_text]}",
-                justify="left",
+                "{task.fields[price_text]}"
             ),
             expand=True,
-            refresh_per_second=1,
-            console=self.console  # Use the shared console
+            console=self.console
         )
         
-        self.task_id = None
-        self.progress.start()
+        # Create progress bar (for showing completion)
+        self.progress_bar = Progress(
+            TextColumn("[cyan]{task.description}[/cyan]"),
+            BarColumn(),
+            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+            TextColumn("[bold white]•[/bold white]"),
+            TimeElapsedColumn(),
+            TextColumn("[bold white]•[/bold white]"),
+            TimeRemainingColumn(),
+            expand=True,
+            console=self.console
+        )
 
-    @property
-    def total(self) -> int:
-        """Get total tasks from progress."""
-        if self.progress and self.task_id is not None:
-            return self.progress.tasks[self.task_id].total
-        return 0
+        # Create a group with fixed height
+        self.progress_group = Group(
+            Panel(
+                Group(
+                    self.status_progress,
+                    self.progress_bar
+                ),
+                title="Progress",
+                padding=(0, 1),
+            )
+        )
+
+        # Create live display
+        self.live = Live(
+            self.progress_group,
+            console=self.console,
+            refresh_per_second=1,
+            transient=False,
+            # auto_refresh=True,
+            vertical_overflow="visible"
+        )
+
+        # Start tracking
+        self.status_task_id = self.status_progress.add_task(
+            "",
+            start=True,
+            model_name_text="[bold white]Model:[/bold white] --",
+            status_text="[bold white]Status:[/bold white] --",
+            token_text="[bold white]Tokens:[/bold white] --",
+            cost_text="[bold white]Cost:[/bold white] --",
+            rate_limit_text="[bold white]Rate Limits:[/bold white] --",
+            price_text="[bold white]Model Pricing:[/bold white] --"
+        )
         
+        self.progress_task_id = self.progress_bar.add_task(
+            description="Processing",
+            total=100
+        )
+
+        # Add some newlines before starting live display
+        print("\n\n")
+        self.live.start()
+
     def initialize_progress(self, total_requests: int, processor_name: str):
         """Initialize the progress bar with total requests."""
+        self.total = total_requests
+        
         # Initialize cost rates here, after model has been set
         if self.model in model_cost:
             self.input_cost_per_million = model_cost[self.model]['input_cost_per_token'] * 1_000_000
             self.output_cost_per_million = model_cost[self.model]['output_cost_per_token'] * 1_000_000
         
-        self.task_id = self.progress.add_task(
+        # Update progress bar task with proper description and total
+        self.progress_bar.update(
+            self.progress_task_id,
             description=f"[cyan]{processor_name}",
-            total=total_requests,
-            completed=0,
-            status_text="[bold white]Status:[/bold white] [dim]Initializing...[/dim]",
-            token_text="[bold white]Tokens:[/bold white] --",
-            cost_text="[bold white]Cost:[/bold white] --",
-            model_name_text="[bold white]Model:[/bold white] --",
-            rate_limit_text="[bold white]Rate Limits:[/bold white] --",
-            price_text="[bold white]Model Pricing:[/bold white] --"
+            total=total_requests
+        )
+
+    def update_progress_display(self):
+        """Update both status and progress displays."""
+        if not self.live or self.status_task_id is None:
+            return
+
+        # Force refresh the display
+        self.live.refresh()
+        
+        # Calculate stats
+        avg_prompt = self.total_prompt_tokens / max(1, self.num_tasks_succeeded)
+        avg_completion = self.total_completion_tokens / max(1, self.num_tasks_succeeded)
+        elapsed_hours = max(0.001, self.progress_bar.tasks[self.progress_task_id].elapsed) / 3600
+        cost_per_hour = self.total_cost / elapsed_hours if elapsed_hours > 0 else 0
+        projected_cost = (self.total_cost / max(1, self.num_tasks_succeeded)) * self.total
+
+        # Update status information
+        self.status_progress.update(
+            self.status_task_id,
+            model_name_text=f"[bold white]Model:[/bold white] [blue]{self.model}[/blue]",
+            status_text=(
+                "[bold white]Status:[/bold white] Processing "
+                f"[dim]([green]✓{self.num_tasks_succeeded}[/green] "
+                f"[red]✗{self.num_tasks_failed}[/red] "
+                f"[yellow]⋯{self.num_tasks_in_progress}[/yellow])[/dim]"
+            ),
+            token_text=(
+                "[bold white]Tokens:[/bold white] "
+                f"Avg Input: [blue]{avg_prompt:.0f}[/blue] • "
+                f"Avg Output: [blue]{avg_completion:.0f}[/blue]"
+            ),
+            cost_text=(
+                "[bold white]Cost:[/bold white] "
+                f"Current: [magenta]${self.total_cost:.3f}[/magenta] • "
+                f"Projected: [magenta]${projected_cost:.3f}[/magenta] • "
+                f"Rate: [magenta]${cost_per_hour:.3f}/hr[/magenta]"
+            ),
+            rate_limit_text=(
+                "[bold white]Rate Limits:[/bold white] "
+                f"rpm: [blue]{self.max_requests_per_minute}[/blue] • "
+                f"tpm: [blue]{self.max_tokens_per_minute}[/blue]"
+            ),
+            price_text=(
+                "[bold white]Model Pricing:[/bold white] Per 1M tokens: "
+                f"Input: [red]${self.input_cost_per_million:.3f}[/red] • "
+                f"Output: [red]${self.output_cost_per_million:.3f}[/red]"
+            )
+        )
+
+        # Update progress bar
+        self.progress_bar.update(
+            self.progress_task_id,
+            completed=self.num_tasks_succeeded
+        )
+
+    def update_error_state(self, error_message: str):
+        """Update the display to show an error state."""
+        if not self.live or self.status_task_id is None:
+            return
+        
+        self.status_progress.update(
+            self.status_task_id,
+            model_name_text="[dim]Process failed[/dim]",
+            status_text=f"[bold red]Error:[/bold red] {error_message}",
+            token_text="[dim]Process failed[/dim]",
+            cost_text="[dim]Process failed[/dim]",
+            rate_limit_text="[dim]Process failed[/dim]",
+            price_text="[dim]Process failed[/dim]"
         )
 
     def update_stats(self, token_usage: TokenUsage, cost: float):
@@ -156,79 +288,17 @@ class StatusTracker:
             self.total_cost += cost
         self.update_progress_display()
 
-    def update_progress_display(self):
-        """Update the rich progress display with current statistics."""
-        if not self.progress or self.task_id is None:
-            return
-        # Calculate averages and stats
-        avg_prompt = self.total_prompt_tokens / max(1, self.num_tasks_succeeded)
-        avg_completion = self.total_completion_tokens / max(1, self.num_tasks_succeeded)
-        avg_total = self.total_tokens / max(1, self.num_tasks_succeeded)
-        avg_cost = self.total_cost / max(1, self.num_tasks_succeeded)
-        projected_cost = avg_cost * self.total
-        
-        # Calculate cost per hour
-        elapsed_hours = max(0.001, self.progress.tasks[self.task_id].elapsed) / 3600
-        cost_per_hour = self.total_cost / elapsed_hours if elapsed_hours > 0 else 0
-
-        # Format the text for each line
-        status_text = (
-            "[bold white]Status:[/bold white] Processing "
-            f"[dim]([green]✓{self.num_tasks_succeeded}[/green] "
-            f"[red]✗{self.num_tasks_failed}[/red] "
-            f"[yellow]⋯{self.num_tasks_in_progress}[/yellow])[/dim]"
-        )
-
-        token_text = (
-            "[bold white]Tokens:[/bold white] "
-            f"Avg Input: [blue]{avg_prompt:.0f}[/blue] • "
-            f"Avg Output: [blue]{avg_completion:.0f}[/blue]"
-        )
-
-        cost_text = (
-            "[bold white]Cost:[/bold white] "
-            f"Current: [magenta]${self.total_cost:.3f}[/magenta] • "
-            f"Projected: [magenta]${projected_cost:.3f}[/magenta] • "
-            f"Rate: [magenta]${cost_per_hour:.3f}/hr[/magenta]"
-        )
-        model_name_text = (
-            f"[bold white]Model:[/bold white] [blue]{self.model}[/blue]"
-        )
-        rate_limit_text = (
-            f"[bold white]Rate Limits:[/bold white] "
-            f"rpm: [blue]{self.max_requests_per_minute}[/blue] • "
-            f"tpm: [blue]{self.max_tokens_per_minute}[/blue]"
-        )
-        input_cost_str = f"${self.input_cost_per_million:.3f}" if isinstance(self.input_cost_per_million, float) else 'N/A'
-        output_cost_str = f"${self.output_cost_per_million:.3f}" if isinstance(self.output_cost_per_million, float) else 'N/A'
-        
-        price_text = (
-            "[bold white]Model Pricing:[/bold white] "
-            f"Per 1M tokens: Input: [red]{input_cost_str}[/red] • Output: [red]{output_cost_str}[/red]"
-        )
-
-        self.progress.update(
-            self.task_id,
-            advance=1,
-            completed=self.num_tasks_succeeded,
-            status_text=status_text,
-            token_text=token_text,
-            cost_text=cost_text,
-            model_name_text=model_name_text,
-            rate_limit_text=rate_limit_text,
-            price_text=price_text,
-        )
-
     def __del__(self):
         """Ensure progress bar is stopped on deletion."""
-        if self.progress:
-            self.progress.stop()
+        if self.live:
+            self.live.stop()
 
     def stop(self):
-        """Stop the progress display and show final statistics."""
-        if self.progress:
-            self.progress.stop()
-            
+        """Stop the live display and show final statistics."""
+        if self.live:
+            # Stop the live display
+            self.live.stop()      
+
             # Create final statistics table
             table = Table(title="Final Curator Statistics", box=box.ROUNDED)
             table.add_column("Section/Metric", style="cyan")
@@ -242,32 +312,43 @@ class StatusTracker:
             
             # Request Statistics
             table.add_row("Requests", "", style="bold magenta")
-            table.add_row("Total Processed", str(self.num_tasks_succeeded + self.num_tasks_failed))
-            table.add_row("Successful", f"[green]{self.num_tasks_succeeded}[/green]")
-            table.add_row("Failed", f"[red]{self.num_tasks_failed}[/red]")
+            table.add_row("Total Processed", str(self.num_tasks_started))
+            table.add_row("Successful", str(self.num_tasks_succeeded))
+            table.add_row("Failed", str(self.num_tasks_failed))
             
             # Token Statistics
-            table.add_row("Tokens", "", style="bold magenta") 
-            table.add_row("Total Tokens Used", f"{self.total_tokens:,}")
-            table.add_row("Total Prompt Tokens", f"{self.total_prompt_tokens:,}")
-            table.add_row("Total Completion Tokens", f"{self.total_completion_tokens:,}")
-            table.add_row("Average Tokens per Request", f"{self.total_tokens / max(1, self.num_tasks_succeeded):.1f}")
-            table.add_row("Average Prompt Tokens", f"{self.total_prompt_tokens / max(1, self.num_tasks_succeeded):.1f}")
-            table.add_row("Average Completion Tokens", f"{self.total_completion_tokens / max(1, self.num_tasks_succeeded):.1f}")
+            table.add_row("Tokens", "", style="bold magenta")
+            table.add_row("Total Tokens Used", str(self.total_tokens))
+            table.add_row("Total Prompt Tokens", str(self.total_prompt_tokens))
+            table.add_row("Total Completion Tokens", str(self.total_completion_tokens))
+            table.add_row("Average Tokens per Request", f"{self.avg_tokens_per_request:.0f}")
+            table.add_row("Average Prompt Tokens", f"{self.avg_prompt_tokens:.0f}")
+            table.add_row("Average Completion Tokens", f"{self.avg_completion_tokens:.0f}")
             
             # Cost Statistics
             table.add_row("Costs", "", style="bold magenta")
             table.add_row("Total Cost", f"[red]${self.total_cost:.4f}[/red]")
-            table.add_row("Average Cost per Request", f"[red]${self.total_cost / max(1, self.num_tasks_succeeded):.4f}[/red]")
-            table.add_row("Input Cost per 1M Tokens", f"[red]${self.input_cost_per_million:.4f}[/red]")
-            table.add_row("Output Cost per 1M Tokens", f"[red]${self.output_cost_per_million:.4f}[/red]")
+            table.add_row(
+                "Average Cost per Request",
+                "[red]N/A[/red]" if self.num_tasks_succeeded == 0 
+                else f"[red]${self.total_cost / self.num_tasks_succeeded:.4f}[/red]"
+            )
+            table.add_row(
+                "Input Cost per 1M Tokens",
+                "[red]N/A[/red]" if self.input_cost_per_million is None 
+                else f"[red]${self.input_cost_per_million:.4f}[/red]"
+            )
+            table.add_row(
+                "Output Cost per 1M Tokens",
+                "[red]N/A[/red]" if self.output_cost_per_million is None 
+                else f"[red]${self.output_cost_per_million:.4f}[/red]"
+            )
             
             # Performance Statistics
             table.add_row("Performance", "", style="bold magenta")
-            elapsed_time = time.time() - self.start_time
-            cost_per_hour = (self.total_cost / max(1, elapsed_time)) * 3600
-            table.add_row("Total Time", f"{elapsed_time:.1f} seconds")
-            table.add_row("Cost per Hour", f"[magenta]${cost_per_hour:.3f}[/magenta]")
+            table.add_row("Total Time", f"{self.total_time:.2f}s")
+            table.add_row("Average Time per Request", f"{self.avg_time_per_request:.2f}s")
+            table.add_row("Requests per Second", f"{self.requests_per_second:.2f}")
             
             self.console.print(table)
 
@@ -320,21 +401,6 @@ class StatusTracker:
         """Consume capacity for a request"""
         self.available_request_capacity -= 1
         self.available_token_capacity -= token_estimate
-
-    def update_error_state(self, error_message: str):
-        """Update the display to show an error state."""
-        if not self.progress or self.task_id is None:
-            return
-        
-        self.progress.update(
-            self.task_id,
-            status_text=f"[bold red]Error:[/bold red] {error_message}",
-            token_text="[dim]Process failed[/dim]",
-            cost_text="[dim]Process failed[/dim]",
-            model_name_text="[dim]Process failed[/dim]",
-            rate_limit_text="[dim]Process failed[/dim]",
-            price_text="[dim]Process failed[/dim]"
-        )
 
 
 @dataclass
