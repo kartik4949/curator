@@ -5,13 +5,14 @@ import json
 import logging
 import os
 from dataclasses import dataclass, field
-from typing import Callable
+from typing import Callable, Optional
 
 import litellm
 from openai import AsyncOpenAI, NotFoundError
 from openai.types import Batch
 from tqdm import tqdm
 
+from bespokelabs.curator.file_utilities import count_lines
 from bespokelabs.curator.dataset import Dataset
 from bespokelabs.curator.llm.prompt_formatter import PromptFormatter
 from bespokelabs.curator.request_processor.base_request_processor import (
@@ -47,6 +48,8 @@ class OpenAIBatchRequestProcessor(BaseRequestProcessor):
         url: str = "https://api.openai.com/v1/chat/completions",
         presence_penalty: float | None = None,
         frequency_penalty: float | None = None,
+        require_all_responses: bool = None,
+        max_retries: Optional[int] = None,
     ):
         if batch_size > MAX_REQUESTS_PER_BATCH:
             raise ValueError(
@@ -54,7 +57,7 @@ class OpenAIBatchRequestProcessor(BaseRequestProcessor):
                 f"{MAX_REQUESTS_PER_BATCH:,} requests per batch that OpenAI supports. "
                 f"Please set your batch_size to be less than or equal to {MAX_REQUESTS_PER_BATCH:,}."
             )
-        super().__init__(batch_size)
+        super().__init__(batch_size, require_all_responses=require_all_responses)
         self.model = model
         self.url: str = url
         self.check_interval: int = batch_check_interval
@@ -64,48 +67,10 @@ class OpenAIBatchRequestProcessor(BaseRequestProcessor):
         self.frequency_penalty: float | None = frequency_penalty
         self.delete_successful_batch_files: bool = delete_successful_batch_files
         self.delete_failed_batch_files: bool = delete_failed_batch_files
-
-    def get_rate_limits(self) -> dict:
-        """
-        Function to get rate limits for a given annotator. Not available via response headers, so
-        the following is based on tier 5 limits on Nov 6th, 2024.
-
-        These rate limits vary per model
-        and are determined by your organization's usage tier. View the following:
-        https://platform.openai.com/docs/guides/rate-limits/usage-tiers
-        https://platform.openai.com/settings/organization/limits
-
-        Args:
-            model (str): The model for which to get the rate limits.
-            request_url (str): The request URL for which to get the rate limits.
-
-        Returns:
-            dict: A dictionary containing max_tokens_per_day
-        """
-        model_tpd = {
-            "gpt-3.5-turbo": 5_000_000_000,
-            "gpt-3.5-turbo-0125": 5_000_000_000,
-            "gpt-3.5-turbo-1106": 5_000_000_000,
-            "gpt-3.5-turbo-16k": 5_000_000_000,
-            "gpt-3.5-turbo-instruct": 200_000,
-            "gpt-3.5-turbo-instruct-0914": 200_000,
-            "gpt-4": 150_000_000,
-            "gpt-4-0613": 150_000_000,
-            "gpt-4-turbo": 300_000_000,
-            "gpt-4o": 10_000_000_000,
-            "gpt-4o-mini": 15_000_000_000,
-        }
-
-        if self.model not in model_tpd:
-            tpd = 1_000_000_000
+        if max_retries is None:
+            self.max_retries = MAX_RETRIES_PER_OPERATION
         else:
-            tpd = model_tpd[self.model]
-
-        logger.info(f"Automatically set max_tokens_per_day to {tpd}, model: {self.model} ")
-
-        rate_limits = {"max_tokens_per_day": tpd}
-
-        return rate_limits
+            self.max_retries = max_retries
 
     def create_api_specific_request(self, generic_request: GenericRequest) -> dict:
         """
@@ -335,6 +300,7 @@ class OpenAIBatchRequestProcessor(BaseRequestProcessor):
             prompt_formatter,
             delete_successful_batch_files=self.delete_successful_batch_files,
             delete_failed_batch_files=self.delete_failed_batch_files,
+            max_retries=self.max_retries,
         )
 
         run_in_event_loop(self.run_batch_operations(batch_manager, request_files))
@@ -353,6 +319,7 @@ class OpenAIBatchRequestProcessor(BaseRequestProcessor):
             self.check_interval,
             delete_successful_batch_files=self.delete_successful_batch_files,
             delete_failed_batch_files=self.delete_failed_batch_files,
+            max_retries=self.max_retries,
         )
 
         run_in_event_loop(batch_manager.cancel_batches())
@@ -510,6 +477,7 @@ class BatchManager:
         prompt_formatter: PromptFormatter | None = None,
         delete_successful_batch_files: bool = False,
         delete_failed_batch_files: bool = False,
+        max_retries: Optional[int] = None,
     ) -> None:
         """Initialize BatchManager to handle OpenAI batch processing operations.
 
@@ -523,7 +491,7 @@ class BatchManager:
             delete_failed_batch_files (bool): Whether to delete input/error files from OpenAI
                 after batch failure.
         """
-        self.client = AsyncOpenAI(max_retries=MAX_RETRIES_PER_OPERATION)
+        self.client = AsyncOpenAI(max_retries=max_retries)
         self.check_interval = check_interval
         self.working_dir = working_dir
         self.tracker = BatchStatusTracker()
@@ -775,8 +743,7 @@ class BatchManager:
 
                     # Edge case where the batch is still validating, and we need to know the total number of requests
                     if batch_object.status == "validating":
-                        n_requests = len(open(request_file_name, "r").readlines())
-                        batch_object.request_counts.total = n_requests
+                        batch_object.request_counts.total = count_lines(request_file_name)
                     else:
                         n_requests = batch_object.request_counts.total
 

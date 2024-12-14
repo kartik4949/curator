@@ -14,6 +14,7 @@ from datasets import Dataset
 from datasets.arrow_writer import ArrowWriter
 from pydantic import BaseModel, ValidationError
 
+from bespokelabs.curator.file_utilities import count_lines
 from bespokelabs.curator.llm.prompt_formatter import PromptFormatter
 from bespokelabs.curator.request_processor.event_loop import run_in_event_loop
 from bespokelabs.curator.request_processor.generic_request import GenericRequest
@@ -29,8 +30,9 @@ class BaseRequestProcessor(ABC):
     Base class for all request processors.
     """
 
-    def __init__(self, batch_size: Optional[int] = None):
+    def __init__(self, batch_size: Optional[int] = None, require_all_responses: bool = True):
         self.batch_size = batch_size
+        self.require_all_responses = require_all_responses
         # Increase the number of open file descriptors to avoid "Too many open files" errors
         soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
         desired_limit = min(10_000_000, hard)
@@ -38,16 +40,6 @@ class BaseRequestProcessor(ABC):
             f"Adjusting file descriptor limit from {soft} to {desired_limit} (hard limit: {hard})"
         )
         resource.setrlimit(resource.RLIMIT_NOFILE, (desired_limit, hard))
-
-    @abstractmethod
-    def get_rate_limits(self) -> dict:
-        """
-        Returns the rate limits for the API.
-
-        Returns:
-            dict: A dictionary containing the rate limit information.
-        """
-        pass
 
     @abstractmethod
     def create_api_specific_request(self, generic_request: GenericRequest) -> dict:
@@ -216,9 +208,6 @@ class BaseRequestProcessor(ABC):
         Returns:
             Dataset: Completed dataset
         """
-        total_responses_count = 0
-        failed_responses_count = 0
-
         responses_files = glob.glob(f"{working_dir}/responses_*.jsonl")
         if len(responses_files) == 0:
             raise ValueError(f"No responses files found in {working_dir}")
@@ -230,6 +219,8 @@ class BaseRequestProcessor(ABC):
         )
 
         # Process all response files
+        total_responses_count = 0
+        failed_responses_count = 0
         dataset_file = f"{working_dir}/{parse_func_hash}.arrow"
         with ArrowWriter(path=dataset_file) as writer:
             for responses_file in responses_files:
@@ -319,14 +310,35 @@ class BaseRequestProcessor(ABC):
 
                             writer.write(row)
 
-            logger.info(f"Read {total_responses_count} responses, {failed_responses_count} failed")
+            logger.info("Finalizing writer")
+            writer.finalize()
+
+            logger.info(f"Read {total_responses_count} responses.")
             if failed_responses_count == total_responses_count:
                 os.remove(dataset_file)
                 raise ValueError("All requests failed")
 
-            logger.info("Finalizing writer")
+            if failed_responses_count > 0:
+                logger.warning(f"{failed_responses_count} requests failed.")
+                if self.require_all_responses:
+                    os.remove(dataset_file)
+                    raise ValueError(f"Some requests failed and require_all_responses is True")
 
-            writer.finalize()
+            # number of responses matches number of requests
+            request_files = glob.glob(f"{working_dir}/requests_*.jsonl")
+            n_requests = 0
+            for request_file in request_files:
+                n_requests += count_lines(request_file)
+
+            if n_requests != total_responses_count:
+                logger.warning(
+                    f"{n_requests - total_responses_count} requests do not have responses. n_requests is {n_requests} and n_responses is {total_responses_count}"
+                )
+                if self.require_all_responses:
+                    os.remove(dataset_file)
+                    raise ValueError(
+                        f"Some requests do not have responses and require_all_responses is True."
+                    )
 
         return Dataset.from_file(dataset_file)
 

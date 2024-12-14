@@ -39,8 +39,8 @@ from rich.logging import RichHandler
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_REQUESTS_PER_MINUTE = 100
-DEFAULT_TOKENS_PER_MINUTE = 100_000
+DEFAULT_MAX_REQUESTS_PER_MINUTE = 100
+DEFAULT_MAX_TOKENS_PER_MINUTE = 100_000
 
 # Create a shared console instance
 console = Console()
@@ -51,6 +51,7 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s",
     handlers=[RichHandler(console=console, rich_tracebacks=True)]
 )
+DEFAULT_MAX_RETRIES = 10
 
 
 @dataclass
@@ -371,53 +372,58 @@ class BaseOnlineRequestProcessor(BaseRequestProcessor, ABC):
         frequency_penalty: Optional[float] = None,
         max_requests_per_minute: Optional[int] = None,
         max_tokens_per_minute: Optional[int] = None,
+        require_all_responses: bool = None,
+        max_retries: Optional[int] = None,
     ):
-        super().__init__(batch_size=None)
+        super().__init__(batch_size=None, require_all_responses=require_all_responses)
         self.model: str = model
         self.temperature: float | None = temperature
         self.top_p: float | None = top_p
         self.presence_penalty: float | None = presence_penalty
         self.frequency_penalty: float | None = frequency_penalty
         self.prompt_formatter: Optional[PromptFormatter] = None
-        self.max_requests_per_minute: Optional[int] = max_requests_per_minute
-        self.max_tokens_per_minute: Optional[int] = max_tokens_per_minute
-        self.DEFAULT_MAX_REQUESTS_PER_MINUTE = DEFAULT_REQUESTS_PER_MINUTE
-        self.DEFAULT_MAX_TOKENS_PER_MINUTE = DEFAULT_TOKENS_PER_MINUTE
+        self.manual_max_requests_per_minute: Optional[int] = max_requests_per_minute
+        self.manual_max_tokens_per_minute: Optional[int] = max_tokens_per_minute
+        if max_retries is None:
+            self.max_retries = DEFAULT_MAX_RETRIES
+        else:
+            self.max_retries = max_retries
 
-    def get_rate_limit(self, name, header_value):
-        """Uses manual values if set, otherwise uses headers if available, and if not available uses defaults."""
-        manual_value = getattr(self, name)
-        default_value = getattr(self, f"DEFAULT_{name.upper()}")
-        if manual_value is not None:
-            logger.info(f"Manually set {name} to {manual_value}")
-            return manual_value
-        elif header_value != 0:
-            logger.info(f"Automatically set {name} to {header_value}")
-            return header_value
+    @property
+    def max_requests_per_minute(self) -> int:
+        if self.manual_max_requests_per_minute:
+            logger.info(
+                f"Manually set max_requests_per_minute to {self.manual_max_requests_per_minute}"
+            )
+            return self.manual_max_requests_per_minute
+        elif self.header_based_max_requests_per_minute:
+            logger.info(
+                f"Automatically set max_requests_per_minute to {self.header_based_max_requests_per_minute}"
+            )
+            return self.header_based_max_requests_per_minute
         else:
             logger.warning(
-                f"No manual {name} set, and headers based detection failed, using default value of {default_value}"
+                f"No manual max_requests_per_minute set, and headers based detection failed, using default value of {DEFAULT_MAX_REQUESTS_PER_MINUTE}"
             )
-            return default_value
+            return DEFAULT_MAX_REQUESTS_PER_MINUTE
 
-    def get_rate_limits(self) -> dict:
-        """Get rate limits for the API. Returns a dictionary with max_requests_per_minute and max_tokens_per_minute"""
-
-        # Get values from headers
-        header_based_rate_limits = self.get_header_based_rate_limits()
-        header_tpm = header_based_rate_limits["max_tokens_per_minute"]
-        header_rpm = header_based_rate_limits["max_requests_per_minute"]
-
-        # Determine final rate limit
-        tpm = self.get_rate_limit("max_tokens_per_minute", header_tpm)
-        rpm = self.get_rate_limit("max_requests_per_minute", header_rpm)
-
-        return {"max_requests_per_minute": rpm, "max_tokens_per_minute": tpm}
-
-    @abstractmethod
-    def get_header_based_rate_limits(self) -> dict:
-        """Get rate limits for the API from headers. Returns a dictionary with max_requests_per_minute and max_tokens_per_minute"""
-        pass
+    @property
+    def max_tokens_per_minute(self) -> int:
+        if self.manual_max_tokens_per_minute:
+            logger.info(
+                f"Manually set max_tokens_per_minute to {self.manual_max_tokens_per_minute}"
+            )
+            return self.manual_max_tokens_per_minute
+        elif self.header_based_max_tokens_per_minute:
+            logger.info(
+                f"Automatically set max_tokens_per_minute to {self.header_based_max_tokens_per_minute}"
+            )
+            return self.header_based_max_tokens_per_minute
+        else:
+            logger.warning(
+                f"No manual max_tokens_per_minute set, and headers based detection failed, using default value of {DEFAULT_MAX_TOKENS_PER_MINUTE}"
+            )
+            return DEFAULT_MAX_TOKENS_PER_MINUTE
 
     @abstractmethod
     def estimate_total_tokens(self, messages: list) -> int:
@@ -460,7 +466,7 @@ class BaseOnlineRequestProcessor(BaseRequestProcessor, ABC):
                 self.process_requests_from_file(
                     generic_request_filepath=request_file,
                     save_filepath=response_file,
-                    max_attempts=5,
+                    max_attempts=self.max_retries,
                     resume=True,
                 )
             )
@@ -625,21 +631,21 @@ class BaseOnlineRequestProcessor(BaseRequestProcessor, ABC):
                 if pending_requests:
                     await asyncio.gather(*pending_requests)
 
-                # Process any remaining retries in the queue
-                pending_retries = set()
-                while not queue_of_requests_to_retry.empty() or pending_retries:
-                    # Process new items from the queue if we have capacity
-                    if not queue_of_requests_to_retry.empty():
-                        retry_request = await queue_of_requests_to_retry.get()
-                        token_estimate = self.estimate_total_tokens(
-                            retry_request.generic_request.messages
-                        )
-                        attempt_number = 6 - retry_request.attempts_left
-                        logger.info(
-                            f"Processing retry for request {retry_request.task_id} "
-                            f"(attempt #{attempt_number} of 5). "
-                            f"Previous errors: {retry_request.result}"
-                        )
+            # Process any remaining retries in the queue
+            pending_retries = set()
+            while not queue_of_requests_to_retry.empty() or pending_retries:
+                # Process new items from the queue if we have capacity
+                if not queue_of_requests_to_retry.empty():
+                    retry_request = await queue_of_requests_to_retry.get()
+                    token_estimate = self.estimate_total_tokens(
+                        retry_request.generic_request.messages
+                    )
+                    attempt_number = 1 + self.max_retries - retry_request.attempts_left
+                    logger.info(
+                        f"Processing retry for request {retry_request.task_id} "
+                        f"(attempt #{attempt_number} of {self.max_retries}). "
+                        f"Previous errors: {retry_request.result}"
+                    )
 
                         # Wait for capacity if needed
                         while not status_tracker.has_capacity(token_estimate):
@@ -731,7 +737,7 @@ class BaseOnlineRequestProcessor(BaseRequestProcessor, ABC):
                 retry_queue.put_nowait(request)
             else:
                 logger.error(
-                    f"Request {request.task_id} failed permanently after exhausting all 5 retry attempts. "
+                    f"Request {request.task_id} failed permanently after exhausting all {self.max_retries} retry attempts. "
                     f"Errors: {[str(e) for e in request.result]}"
                 )
                 generic_response = GenericResponse(

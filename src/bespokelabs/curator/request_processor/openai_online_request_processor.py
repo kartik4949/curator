@@ -81,6 +81,8 @@ class OpenAIOnlineRequestProcessor(BaseOnlineRequestProcessor):
         frequency_penalty: Optional[float] = None,
         max_requests_per_minute: Optional[int] = None,
         max_tokens_per_minute: Optional[int] = None,
+        require_all_responses: bool = None,
+        max_retries: Optional[int] = None,
     ):
         super().__init__(
             model=model,
@@ -90,16 +92,21 @@ class OpenAIOnlineRequestProcessor(BaseOnlineRequestProcessor):
             frequency_penalty=frequency_penalty,
             max_requests_per_minute=max_requests_per_minute,
             max_tokens_per_minute=max_tokens_per_minute,
+            require_all_responses=require_all_responses,
+            max_retries=max_retries,
         )
         self.url = url
         self.api_key = api_key
         self.token_encoding = tiktoken.get_encoding(get_token_encoding_name(model))
+        self.header_based_max_requests_per_minute, self.header_based_max_tokens_per_minute = (
+            self.get_header_based_rate_limits()
+        )
 
-    def get_header_based_rate_limits(self) -> dict:
+    def get_header_based_rate_limits(self) -> tuple[int, int]:
         """Get rate limits from OpenAI API headers.
 
         Returns:
-            dict: Contains 'max_requests_per_minute' and 'max_tokens_per_minute'
+            tuple[int, int]: Contains 'max_requests_per_minute' and 'max_tokens_per_minute'
 
         Note:
             - Makes a dummy request to get actual rate limits
@@ -117,7 +124,7 @@ class OpenAIOnlineRequestProcessor(BaseOnlineRequestProcessor):
         rpm = int(response.headers.get("x-ratelimit-limit-requests", 0))
         tpm = int(response.headers.get("x-ratelimit-limit-tokens", 0))
 
-        return {"max_requests_per_minute": rpm, "max_tokens_per_minute": tpm}
+        return rpm, tpm
 
     def estimate_output_tokens(self) -> int:
         """Estimate number of tokens in the response.

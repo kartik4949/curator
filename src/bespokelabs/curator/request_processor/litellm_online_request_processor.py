@@ -49,6 +49,8 @@ class LiteLLMOnlineRequestProcessor(BaseOnlineRequestProcessor):
         frequency_penalty: Optional[float] = None,
         max_requests_per_minute: Optional[int] = None,
         max_tokens_per_minute: Optional[int] = None,
+        require_all_responses: bool = False,
+        max_retries: Optional[int] = None,
     ):
         super().__init__(
             model=model,
@@ -58,8 +60,13 @@ class LiteLLMOnlineRequestProcessor(BaseOnlineRequestProcessor):
             frequency_penalty=frequency_penalty,
             max_requests_per_minute=max_requests_per_minute,
             max_tokens_per_minute=max_tokens_per_minute,
+            require_all_responses=require_all_responses,
+            max_retries=max_retries,
         )
         self.client = instructor.from_litellm(litellm.acompletion)
+        self.header_based_max_requests_per_minute, self.header_based_max_tokens_per_minute = (
+            self.get_header_based_rate_limits()
+        )
 
     def check_structured_output_support(self):
         """Verify if the model supports structured output via instructor.
@@ -154,11 +161,11 @@ class LiteLLMOnlineRequestProcessor(BaseOnlineRequestProcessor):
         logger.info(f"Test call headers: {headers}")
         return headers
 
-    def get_header_based_rate_limits(self) -> dict:
+    def get_header_based_rate_limits(self) -> tuple[int, int]:
         """Retrieve rate limits from the LLM provider via LiteLLM.
 
         Returns:
-            dict: Contains 'max_requests_per_minute' and 'max_tokens_per_minute'
+            tuple[int, int]: Contains 'max_requests_per_minute' and 'max_tokens_per_minute'
 
         Note:
             - Makes a test request to get rate limit information from response headers.
@@ -170,7 +177,7 @@ class LiteLLMOnlineRequestProcessor(BaseOnlineRequestProcessor):
         rpm = int(headers.get("x-ratelimit-limit-requests", 0))
         tpm = int(headers.get("x-ratelimit-limit-tokens", 0))
 
-        return {"max_requests_per_minute": rpm, "max_tokens_per_minute": tpm}
+        return rpm, tpm
 
     def create_api_specific_request(self, generic_request: GenericRequest) -> dict:
         """Convert a generic request into a LiteLLM-compatible format.

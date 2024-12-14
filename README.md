@@ -29,7 +29,7 @@
   </a>
 </p>
 
-### Overview
+## Overview
 
 Bespoke Curator makes it very easy to create high-quality synthetic data at scale, which you can use to finetune models or use for structured data extraction at scale.
 
@@ -38,7 +38,7 @@ Bespoke Curator is an open-source project:
 * A Curator Viewer which makes it easy to view the datasets, thus aiding in the dataset creation.
 * We will also be releasing high-quality datasets that should move the needle on post-training.
 
-### Key Features
+## Key Features
 
 1. **Programmability and Structured Outputs**: Synthetic data generation is lot more than just using a single prompt -- it involves calling LLMs multiple times and orchestrating control-flow. Curator treats structured outputs as first class citizens and helps you design complex pipelines.
 2. **Built-in Performance Optimization**: We often see calling LLMs in loops, or inefficient implementation of multi-threading. We have baked in performance optimizations so that you don't need to worry about those!
@@ -46,48 +46,91 @@ Bespoke Curator is an open-source project:
 4. **Native HuggingFace Dataset Integration**: Work directly on HuggingFace Dataset objects throughout your pipeline. Your synthetic data is immediately ready for fine-tuning!
 5. **Interactive Curator Viewer**: Improve and iterate on your prompts using our built-in viewer. Inspect LLM requests and responses in real-time, allowing you to iterate and refine your data generation strategy with immediate feedback.
 
-### Installation
+## Installation
 
 ```bash
 pip install bespokelabs-curator
 ```
 
-### Usage
+## Usage
+To run the examples below, make sure to set your OpenAI API key in 
+the environment variable `OPENAI_API_KEY` by running `export OPENAI_API_KEY=sk-...` in your terminal.
 
+### Hello World with `SimpleLLM`: A simple interface for calling LLMs
+
+```python
+from bespokelabs import curator
+llm = curator.SimpleLLM(model_name="gpt-4o-mini")
+poem = llm("Write a poem about the importance of data in AI.")
+print(poem)
+# Or you can pass a list of prompts to generate multiple responses.
+poems = llm(["Write a poem about the importance of data in AI.",
+            "Write a haiku about the importance of data in AI."])
+print(poems)
+```
+Note that retries and caching are enabled by default.
+So now if you run the same prompt again, you will get the same response, pretty much instantly.
+You can delete the cache at `~/.cache/curator`.
+
+#### Use LiteLLM backend for calling other models
+You can use the [LiteLLM](https://docs.litellm.ai/docs/providers) backend for calling other models.
+
+```python
+from bespokelabs import curator
+llm = curator.SimpleLLM(model_name="claude-3-5-sonnet-20240620", backend="litellm")
+poem = llm("Write a poem about the importance of data in AI.")
+print(poem)
+```
+
+### Visualize in Curator Viewer
+Run `curator-viewer` on the command line to see the dataset in the viewer.
+
+You can click on a run and then click on a specific row to see the LLM request and response.
+![Curator Responses](docs/curator-responses.png)
+More examples below.
+
+### `LLM`: A more powerful interface for synthetic data generation
+
+Let's use structured outputs to generate poems.
 ```python
 from bespokelabs import curator
 from datasets import Dataset
 from pydantic import BaseModel, Field
 from typing import List
 
-# Create a dataset object for the topics you want to create the poems.
 topics = Dataset.from_dict({"topic": [
     "Urban loneliness in a bustling city",
     "Beauty of Bespoke Labs's Curator library"
 ]})
+```
 
-# Define a class to encapsulate a list of poems.
+Define a class to encapsulate a list of poems.
+```python
 class Poem(BaseModel):
     poem: str = Field(description="A poem.")
 
 class Poems(BaseModel):
     poems_list: List[Poem] = Field(description="A list of poems.")
+```
 
-
-# We define an `LLM` object that generates poems which gets applied to the topics dataset.
+We define an `LLM` object that generates poems which gets applied to the topics dataset.
+```python
 poet = curator.LLM(
-    # `prompt_func` takes a row of the dataset as input.
-    # `row` is a dictionary with a single key 'topic' in this case.
     prompt_func=lambda row: f"Write two poems about {row['topic']}.",
     model_name="gpt-4o-mini",
     response_format=Poems,
-    # `row` is the input row, and `poems` is the `Poems` class which 
-    # is parsed from the structured output from the LLM.
     parse_func=lambda row, poems: [
         {"topic": row["topic"], "poem": p.poem} for p in poems.poems_list
     ],
 )
+```
+Here:
+* `prompt_func` takes a row of the dataset as input and returns the prompt for the LLM.
+* `response_format` is the structured output class we defined above.
+* `parse_func` takes the input (`row`) and the structured output (`poems`) and converts it to a list of dictionaries. This is so that we can easily convert the output to a HuggingFace Dataset object.
 
+Now we can apply the `LLM` object to the dataset, which reads very pythonic.
+```python
 poem = poet(topics)
 print(poem.to_pandas())
 # Example output:
@@ -102,9 +145,6 @@ and we can scale this up to create tens of thousands of diverse poems.
 You can see a more detailed example in the [examples/poem.py](https://github.com/bespokelabsai/curator/blob/mahesh/update_doc/examples/poem.py) file,
 and other examples in the [examples](https://github.com/bespokelabsai/curator/blob/mahesh/update_doc/examples) directory.
 
-To run the examples, make sure to set your OpenAI API key in 
-the environment variable `OPENAI_API_KEY` by running `export OPENAI_API_KEY=sk-...` in your terminal.
-
 See the [docs](https://docs.bespokelabs.ai/) for more details as well as 
 for troubleshooting information.
 
@@ -117,6 +157,12 @@ curator-viewer
 ```
 
 This will pop up a browser window with the viewer running on `127.0.0.1:3000` by default if you haven't specified a different host and port.
+
+The dataset viewer shows all the different runs you have made.
+![Curator Runs](docs/curator-runs.png)
+
+You can also see the dataset and the responses from the LLM.
+![Curator Dataset](docs/curator-dataset.png)
 
 
 Optional parameters to run the viewer on a different host and port:
