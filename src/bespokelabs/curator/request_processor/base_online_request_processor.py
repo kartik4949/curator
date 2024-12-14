@@ -62,6 +62,7 @@ class StatusTracker:
     num_tasks_succeeded: int = 0
     num_tasks_failed: int = 0
     num_tasks_already_completed: int = 0
+    num_tasks_loaded_from_cache: int = 0
     num_api_errors: int = 0
     num_other_errors: int = 0
     num_rate_limit_errors: int = 0
@@ -168,16 +169,18 @@ class StatusTracker:
         avg_cost = self.total_cost / max(1, self.num_tasks_succeeded)
         projected_cost = avg_cost * self.total
         
-        # Calculate cost per hour
-        elapsed_hours = max(0.001, self.progress.tasks[self.task_id].elapsed) / 3600
-        cost_per_hour = self.total_cost / elapsed_hours if elapsed_hours > 0 else 0
+        # Calculate current rpm
+        elapsed_minutes = max(0.001, self.progress.tasks[self.task_id].elapsed) / 60
+        current_rpm = self.num_tasks_succeeded / elapsed_minutes if elapsed_minutes > 0 else 0
 
         # Format the text for each line
         status_text = (
             "[bold white]Status:[/bold white] Processing "
             f"[dim]([green]✓{self.num_tasks_succeeded}[/green] "
             f"[red]✗{self.num_tasks_failed}[/red] "
-            f"[yellow]⋯{self.num_tasks_in_progress}[/yellow])[/dim]"
+            f"[yellow]⋯{self.num_tasks_in_progress}[/yellow] "
+            f"[blue]↻{self.num_tasks_loaded_from_cache}[/blue])[/dim] "
+            f"[dim]({current_rpm:.1f} rpm)[/dim]"
         )
 
         token_text = (
@@ -190,7 +193,7 @@ class StatusTracker:
             "[bold white]Cost:[/bold white] "
             f"Current: [magenta]${self.total_cost:.3f}[/magenta] • "
             f"Projected: [magenta]${projected_cost:.3f}[/magenta] • "
-            f"Rate: [magenta]${cost_per_hour:.3f}/hr[/magenta]"
+            f"Rate: [magenta]${self.total_cost / max(1, self.num_tasks_succeeded):.3f}/min[/magenta]"
         )
         model_name_text = (
             f"[bold white]Model:[/bold white] [blue]{self.model}[/blue]"
@@ -247,16 +250,17 @@ class StatusTracker:
             table.add_row("Total Processed", str(self.num_tasks_succeeded + self.num_tasks_failed))
             table.add_row("Successful", f"[green]{self.num_tasks_succeeded}[/green]")
             table.add_row("Failed", f"[red]{self.num_tasks_failed}[/red]")
+            table.add_row("Loaded from Cache", f"[blue]{self.num_tasks_loaded_from_cache}[/blue]")
             
             # Token Statistics
             table.add_row("Tokens", "", style="bold magenta") 
             table.add_row("Total Tokens Used", f"{self.total_tokens:,}")
             table.add_row("Total Prompt Tokens", f"{self.total_prompt_tokens:,}")
             table.add_row("Total Completion Tokens", f"{self.total_completion_tokens:,}")
-            table.add_row("Average Tokens per Request", f"{self.total_tokens / max(1, self.num_tasks_succeeded):.1f}")
-            table.add_row("Average Prompt Tokens", f"{self.total_prompt_tokens / max(1, self.num_tasks_succeeded):.1f}")
-            table.add_row("Average Completion Tokens", f"{self.total_completion_tokens / max(1, self.num_tasks_succeeded):.1f}")
-            
+            if self.num_tasks_succeeded > 0:
+                table.add_row("Average Tokens per Request", f"{int(self.total_tokens / self.num_tasks_succeeded)}")
+                table.add_row("Average Prompt Tokens", f"{int(self.total_prompt_tokens / self.num_tasks_succeeded)}")
+                table.add_row("Average Completion Tokens", f"{int(self.total_completion_tokens / self.num_tasks_succeeded)}")
             # Cost Statistics
             table.add_row("Costs", "", style="bold magenta")
             table.add_row("Total Cost", f"[red]${self.total_cost:.4f}[/red]")
@@ -267,9 +271,11 @@ class StatusTracker:
             # Performance Statistics
             table.add_row("Performance", "", style="bold magenta")
             elapsed_time = time.time() - self.start_time
-            cost_per_hour = (self.total_cost / max(1, elapsed_time)) * 3600
-            table.add_row("Total Time", f"{elapsed_time:.1f} seconds")
-            table.add_row("Cost per Hour", f"[magenta]${cost_per_hour:.3f}[/magenta]")
+            elapsed_minutes = elapsed_time / 60
+            rpm = self.num_tasks_succeeded / max(0.001, elapsed_minutes)
+            table.add_row("Total Time", f"{elapsed_time:.2f}s")
+            table.add_row("Average Time per Request", f"{elapsed_time / max(1, self.num_tasks_succeeded):.2f}s")
+            table.add_row("Requests per Minute", f"{rpm:.1f}")
             
             self.console.print(table)
 
@@ -279,7 +285,8 @@ class StatusTracker:
             f"In Progress: {self.num_tasks_in_progress}, "
             f"Succeeded: {self.num_tasks_succeeded}, "
             f"Failed: {self.num_tasks_failed}, "
-            f"Already Completed: {self.num_tasks_already_completed}\n"
+            f"Already Completed: {self.num_tasks_already_completed}, "
+            f"Loaded from Cache: {self.num_tasks_loaded_from_cache}\n"
             f"Errors - API: {self.num_api_errors}, "
             f"Rate Limit: {self.num_rate_limit_errors}, "
             f"Other: {self.num_other_errors}"
@@ -579,8 +586,7 @@ class BaseOnlineRequestProcessor(BaseRequestProcessor, ABC):
                         generic_request = GenericRequest.model_validate_json(line)
 
                         if resume and generic_request.original_row_idx in completed_request_ids:
-                            status_tracker.num_tasks_already_completed += 1
-                            status_tracker.num_tasks_succeeded += 1
+                            status_tracker.num_tasks_loaded_from_cache += 1
                             status_tracker.update_progress_display()
                             continue
 
