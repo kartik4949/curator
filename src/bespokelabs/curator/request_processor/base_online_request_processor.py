@@ -491,19 +491,10 @@ class BaseOnlineRequestProcessor(BaseRequestProcessor, ABC):
             
             # Initialize progress display
             status_tracker.initialize_progress(total_requests, self.__class__.__name__)
-
-            try:
-                # Get rate limits
-                rate_limits = self.get_rate_limits()
-                status_tracker.max_requests_per_minute = rate_limits["max_requests_per_minute"]
-                status_tracker.max_tokens_per_minute = rate_limits["max_tokens_per_minute"]
-            except Exception as e:
-                # Update status to show error
-                status_tracker.update_error_state(
-                    f"Failed to initialize: {str(e).split('litellm.exceptions.')[-1]}"
-                )
-                status_tracker.stop()
-                raise
+            
+            status_tracker.max_requests_per_minute = self.max_requests_per_minute
+            status_tracker.max_tokens_per_minute = self.max_tokens_per_minute
+            
 
             soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
             resource.setrlimit(
@@ -647,23 +638,23 @@ class BaseOnlineRequestProcessor(BaseRequestProcessor, ABC):
                         f"Previous errors: {retry_request.result}"
                     )
 
-                        # Wait for capacity if needed
-                        while not status_tracker.has_capacity(token_estimate):
-                            await asyncio.sleep(0.1)
+                    # Wait for capacity if needed
+                    while not status_tracker.has_capacity(token_estimate):
+                        await asyncio.sleep(0.1)
 
-                        # Consume capacity before making request
-                        status_tracker.consume_capacity(token_estimate)
+                    # Consume capacity before making request
+                    status_tracker.consume_capacity(token_estimate)
 
-                        task = asyncio.create_task(
-                            self.handle_single_request_with_retries(
-                                request=retry_request,
-                                session=session,
-                                retry_queue=queue_of_requests_to_retry,
-                                save_filepath=save_filepath,
-                                status_tracker=status_tracker,
-                            )
+                    task = asyncio.create_task(
+                        self.handle_single_request_with_retries(
+                            request=retry_request,
+                            session=session,
+                            retry_queue=queue_of_requests_to_retry,
+                            save_filepath=save_filepath,
+                            status_tracker=status_tracker,
                         )
-                        pending_retries.add(task)
+                    )
+                    pending_retries.add(task)
 
                     # Wait for some tasks to complete
                     if pending_retries:
