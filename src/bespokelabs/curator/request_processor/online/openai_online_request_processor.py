@@ -56,9 +56,9 @@ class OpenAIOnlineRequestProcessor(BaseOnlineRequestProcessor, OpenAIRequestMixi
             # https://api-docs.deepseek.com/quick_start/rate_limit.
             # And sending an empty request for rate limits results in a 400 error like this:
             # {'error': {'message': 'Empty input messages', 'type': 'invalid_request_error', 'param': None, 'code': 'invalid_request_error'}}
-            self.api_key = os.getenv("DEEPSEEK_API_KEY")
+            self.api_key = os.getenv("DEEPSEEK_API_KEY") or self.config.api_key
         else:
-            self.api_key = os.getenv("OPENAI_API_KEY")
+            self.api_key = os.getenv("OPENAI_API_KEY") or self.config.api_key
             self.header_based_max_requests_per_minute, self.header_based_max_tokens_per_minute = self.get_header_based_rate_limits()
         self.token_encoding = self.get_token_encoding()
 
