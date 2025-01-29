@@ -39,6 +39,7 @@ class OpenAIOnlineRequestProcessor(BaseOnlineRequestProcessor, OpenAIRequestMixi
 
     def __init__(self, config: OnlineRequestProcessorConfig):
         """Initialize the OpenAIOnlineRequestProcessor."""
+        config = OpenAIRequestMixin.patch_external_openai_compatibles(config)
         super().__init__(config)
 
         if self.config.base_url is None:
