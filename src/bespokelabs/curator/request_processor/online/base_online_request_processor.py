@@ -16,7 +16,6 @@ from dataclasses import dataclass, field
 
 import aiofiles
 import aiohttp
-import litellm
 
 from bespokelabs.curator.llm.prompt_formatter import PromptFormatter
 from bespokelabs.curator.request_processor.base_request_processor import BaseRequestProcessor
@@ -189,15 +188,7 @@ class BaseOnlineRequestProcessor(BaseRequestProcessor, ABC):
             Calculated cost of the completion
         """
         # Calculate cost using litellm
-        try:
-            if self.config.model in litellm.model_cost:
-                cost = litellm.completion_cost(completion_response=response)
-            else:
-                cost = 0
-        except Exception:
-            # We should ideally not catch a catch-all exception here. But litellm is not throwing any specific error.
-            cost = 0
-
+        cost = self._cost_processor.cost(completion_response=response)
         return cost
 
     def requests_to_responses(

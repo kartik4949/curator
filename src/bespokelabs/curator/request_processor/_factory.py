@@ -103,7 +103,7 @@ class _RequestProcessorFactory:
                 raise ValueError("KLUSTERAI_API_KEY is not set")
             from bespokelabs.curator.request_processor.online.openai_online_request_processor import OpenAIOnlineRequestProcessor
 
-            _request_processor = OpenAIOnlineRequestProcessor(config)
+            _request_processor = OpenAIOnlineRequestProcessor(config, compatible_provider="klusterai")
         elif backend == "klusterai" and batch:
             config.base_url = "https://api.kluster.ai/v1"
             config.api_key = config.api_key or os.getenv("KLUSTERAI_API_KEY")
@@ -111,7 +111,7 @@ class _RequestProcessorFactory:
                 raise ValueError("KLUSTERAI_API_KEY is not set")
             from bespokelabs.curator.request_processor.batch.openai_batch_request_processor import OpenAIBatchRequestProcessor
 
-            _request_processor = OpenAIBatchRequestProcessor(config)
+            _request_processor = OpenAIBatchRequestProcessor(config, compatible_provider="klusterai")
         elif backend == "openai" and not batch:
             from bespokelabs.curator.request_processor.online.openai_online_request_processor import OpenAIOnlineRequestProcessor
 

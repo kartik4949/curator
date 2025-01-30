@@ -3,12 +3,12 @@ import json
 import logging
 import warnings
 
-import litellm
 from openai import AsyncOpenAI, NotFoundError
 from openai.types.batch import Batch
 from openai.types.batch_request_counts import BatchRequestCounts
 from openai.types.file_object import FileObject
 
+from bespokelabs.curator.cost import cost_processor_factory
 from bespokelabs.curator.request_processor.batch.base_batch_request_processor import BaseBatchRequestProcessor
 from bespokelabs.curator.request_processor.config import BatchRequestProcessorConfig
 from bespokelabs.curator.request_processor.openai_request_mixin import OpenAIRequestMixin
@@ -32,9 +32,10 @@ class OpenAIBatchRequestProcessor(BaseBatchRequestProcessor, OpenAIRequestMixin)
     file uploads, batch submissions, and result retrieval.
     """
 
-    def __init__(self, config: BatchRequestProcessorConfig) -> None:
+    def __init__(self, config: BatchRequestProcessorConfig, compatible_provider=None) -> None:
         """Initialize the OpenAIBatchRequestProcessor."""
         super().__init__(config)
+        self._cost_processor = cost_processor_factory(compatible_provider or self.backend)
 
         self._skip_file_status_check = False
         if self.config.base_url is None:
@@ -190,18 +191,9 @@ class OpenAIBatchRequestProcessor(BaseBatchRequestProcessor, OpenAIRequestMixin)
                 total_tokens=usage.get("total_tokens", 0),
             )
             response_message, response_errors = self.prompt_formatter.parse_response_message(response_message_raw)
-            if self.backend == "klusterai":
-                cost = 0.0
-            else:
-                try:
-                    cost = litellm.completion_cost(
-                        model=self.config.model,
-                        prompt=str(generic_request.messages),
-                        completion=response_message_raw,
-                    )
-                except litellm.exceptions.BadRequestError:
-                    cost = 0.0
-                    logging.warn(f"Could not retrieve cost for the model: {self.config.model}")
+            cost = self._cost_processor.cost(
+                model=self.config.model, prompt=str(generic_request.messages), completion=response_message_raw, completion_window=self.config.completion_window
+            )
 
         return GenericResponse(
             response_message=response_message,

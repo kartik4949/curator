@@ -9,6 +9,7 @@ import litellm
 import requests
 import tiktoken
 
+from bespokelabs.curator.cost import cost_processor_factory
 from bespokelabs.curator.request_processor.config import OnlineRequestProcessorConfig
 from bespokelabs.curator.request_processor.online.base_online_request_processor import APIRequest, BaseOnlineRequestProcessor
 from bespokelabs.curator.request_processor.openai_request_mixin import OpenAIRequestMixin
@@ -37,9 +38,10 @@ class OpenAIOnlineRequestProcessor(BaseOnlineRequestProcessor, OpenAIRequestMixi
 
     _DEFAULT_COMPLETION_SUFFIX = "/chat/completions"
 
-    def __init__(self, config: OnlineRequestProcessorConfig):
+    def __init__(self, config: OnlineRequestProcessorConfig, compatible_provider: str = None):
         """Initialize the OpenAIOnlineRequestProcessor."""
         super().__init__(config)
+        self._cost_processor = cost_processor_factory(compatible_provider or self.backend)
 
         if self.config.base_url is None:
             if "OPENAI_BASE_URL" in os.environ:

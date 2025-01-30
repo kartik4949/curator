@@ -124,6 +124,12 @@ class OnlineStatusTracker:
         if self.model in model_cost:
             self.input_cost_per_million = model_cost[self.model]["input_cost_per_token"] * 1_000_000
             self.output_cost_per_million = model_cost[self.model]["output_cost_per_token"] * 1_000_000
+        else:
+            from bespokelabs.curator.cost import external_model_cost
+
+            self.input_cost_per_million = external_model_cost(self.model)["input_cost_per_token"] * 1_000_000
+            self.output_cost_per_million = external_model_cost(self.model)["output_cost_per_token"] * 1_000_000
+
         self._progress.start()
 
     def update_stats(self, token_usage: TokenUsage, cost: float):

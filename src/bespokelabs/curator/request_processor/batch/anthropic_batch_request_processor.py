@@ -227,13 +227,8 @@ class AnthropicBatchRequestProcessor(BaseBatchRequestProcessor):
                 total_tokens=usage.get("input_tokens", 0) + usage.get("output_tokens", 0),
             )
             response_message, response_errors = self.prompt_formatter.parse_response_message(response_message_raw)
+            cost = self._cost_processor.cost(model=self.config.model, prompt=str(generic_request.messages), completion=response_message_raw)
 
-            cost = litellm.completion_cost(
-                model=self.config.model,
-                prompt=str(generic_request.messages),
-                completion=response_message_raw,
-            )
-            cost *= 0.5  # 50% off for batch
         elif result_type == "errored":
             error = raw_response["result"]["error"]
             logger.warning(f"custom_id {raw_response['custom_id']} result was '{result_type}' with error '{error}'")
