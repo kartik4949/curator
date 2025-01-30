@@ -1,6 +1,9 @@
 import logging
 from collections import defaultdict
 
+import litellm
+
+litellm.suppress_debug_info = True
 logger = logging.getLogger(__name__)
 
 
@@ -15,7 +18,7 @@ class _LitellmCostProcessor:
             cost_to_complete = litellm.completion_cost(*args, **kwargs)
         except litellm.exceptions.BadRequestError:
             cost_to_complete = 0.0
-            model = args[0]
+            model = kwargs.get("model", None) or args[0]
             logging.warn(f"Could not retrieve cost for the model: {model}")
         if self.batch:
             cost_to_complete *= 0.5
@@ -27,6 +30,18 @@ _EXTERNAL_MODEL_COST_MAP = {
     "klusterai/Meta-Llama-3.1-8B-Instruct-Turbo": {
         "max_tokens": 8192,
         "cost_per_million": {"*": 0.18, "1h": 0.09, "3h": 0.08, "6h": 0.07, "12h": 0.06, "24h": 0.05},  # Input/Output
+    },
+    "klusterai/Meta-Llama-3.3-70B-Instruct-Turbo": {
+        "max_tokens": 8192,
+        "cost_per_million": {"*": 0.70, "1h": 0.35, "3h": 0.33, "6h": 0.30, "12h": 0.25, "24h": 0.20},  # Input/Output
+    },
+    "klusterai/Meta-Llama-3.1-405B-Instruct-Turbo": {
+        "max_tokens": 8192,
+        "cost_per_million": {"*": 3.50, "1h": 1.75, "3h": 1.60, "6h": 1.45, "12h": 1.20, "24h": 0.99},  # Input/Output
+    },
+    "deepseek-ai/DeepSeek-R1": {
+        "max_tokens": 8192,
+        "cost_per_million": {"*": 2.00, "1h": 1.00, "3h": 0.90, "6h": 0.80, "12h": 0.70, "24h": 0.60},  # Input/Output
     },
 }
 
@@ -65,10 +80,10 @@ class _KlusterAICostProcessor(_LitellmCostProcessor):
         return model + "." + completion_window
 
     def cost(self, *args, completion_window="*", **kwargs):
-        if kwargs["completion_response"] is not None:
+        if kwargs.get("completion_response") is not None:
             model = kwargs["completion_response"]["model"]
         else:
-            model = args[0]
+            model = kwargs.get("model", None) or args[0]
         times = 2 if self.batch else 1
         if _KlusterAICostProcessor._wrap(model, completion_window) in _KlusterAICostProcessor._registered_models:  #
             return super().cost(model, *args, **kwargs) * times
