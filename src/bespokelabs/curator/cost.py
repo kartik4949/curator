@@ -11,13 +11,17 @@ class _LitellmCostProcessor:
     def __init__(self, batch=False) -> None:
         self.batch = batch
 
-    def cost(self, *args, completion_window="*", **kwargs):
+    def cost(self, *, completion_window="*", **kwargs):
         import litellm
 
-        model = kwargs.get("model", None)
+        if kwargs.get("completion_response") is not None:
+            model = kwargs["completion_response"]["model"]
+        else:
+            model = kwargs.get("model", None)
+
         cost_to_complete = 0.0
         if model in litellm.model_cost:
-            cost_to_complete = litellm.completion_cost(*args, **kwargs)
+            cost_to_complete = litellm.completion_cost(**kwargs)
         else:
             logging.warn(f"Could not retrieve cost for the model: {model}")
         if self.batch:
@@ -79,20 +83,20 @@ class _KlusterAICostProcessor(_LitellmCostProcessor):
     def _wrap(model, completion_window):
         return model + "." + completion_window
 
-    def cost(self, *args, completion_window="*", **kwargs):
+    def cost(self, *, completion_window="*", **kwargs):
         if kwargs.get("completion_response") is not None:
             model = kwargs["completion_response"]["model"]
         else:
-            model = kwargs.get("model", None) or args[0]
+            model = kwargs.get("model", None)
         times = 2 if self.batch else 1
         if _KlusterAICostProcessor._wrap(model, completion_window) in _KlusterAICostProcessor._registered_models:  #
-            return super().cost(model, *args, **kwargs) * times
+            return super().cost(model, **kwargs) * times
 
         import litellm
 
         litellm.register_model(_get_litellm_cost_map(model))
         _KlusterAICostProcessor._registered_models.add(_KlusterAICostProcessor._wrap(model, completion_window))
-        return super().cost(*args, **kwargs) * times
+        return super().cost(**kwargs) * times
 
 
 COST_PROCESSOR = defaultdict(lambda: _LitellmCostProcessor)
