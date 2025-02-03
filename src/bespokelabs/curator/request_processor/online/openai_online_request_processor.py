@@ -210,7 +210,8 @@ class OpenAIOnlineRequestProcessor(BaseOnlineRequestProcessor, OpenAIRequestMixi
             if "error" in response:
                 status_tracker.num_api_errors += 1
                 error = response["error"]
-                if "rate limit" in error.get("message", "").lower():
+                error_message = error if isinstance(error, str) else error.get("message", "")
+                if "rate limit" in error_message.lower():
                     status_tracker.time_of_last_rate_limit_error = time.time()
                     status_tracker.num_rate_limit_errors += 1
                     status_tracker.num_api_errors -= 1

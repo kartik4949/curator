@@ -116,7 +116,6 @@ class BaseRequestProcessor(ABC):
         generic_request_files = self.create_request_files(dataset)
 
         self.requests_to_responses(generic_request_files)
-
         return self.create_dataset_files(parse_func_hash)
 
     def _verify_existing_request_files(self, dataset: Optional["Dataset"]) -> List[int]:
