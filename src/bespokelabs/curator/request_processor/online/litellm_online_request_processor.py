@@ -44,8 +44,6 @@ class LiteLLMOnlineRequestProcessor(BaseOnlineRequestProcessor):
 
     def __init__(self, config: OnlineRequestProcessorConfig):
         """Initialize the LiteLLMOnlineRequestProcessor."""
-        self.default_max_concurrent_requests = 200
-
         super().__init__(config)
         if self.config.base_url is not None:
             litellm.api_base = self.config.base_url
