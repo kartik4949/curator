@@ -80,13 +80,6 @@ class BaseBatchRequestProcessor(BaseRequestProcessor):
             - Updates progress bars for batch submission and processing
             - Generates response files for completed batches
         """
-        if self.config.batch_size > self.max_requests_per_batch:
-            raise ValueError(
-                f"batch_size {self.config.batch_size} is greater than the maximum of "
-                f"{self.max_requests_per_batch:,} requests per batch that {self.__class__.__name__} supports. "
-                f"Please set your batch_size to be less than or equal to {self.max_requests_per_batch:,}."
-            )
-
         self.semaphore = asyncio.Semaphore(self.max_concurrent_batch_operations)
         self._batch_objects_file_lock = asyncio.Lock()
         self.batch_objects_file = os.path.join(self.working_dir, "batch_objects.jsonl")
@@ -267,6 +260,21 @@ class BaseBatchRequestProcessor(BaseRequestProcessor):
             GenericBatchRequestCounts: Standardized request count object.
         """
         pass
+
+    def validate_config(self):
+        """Validate batch request processor configuration.
+
+        Ensures that configuration parameters are set correctly for batch processing.
+
+        Raises:
+            ValueError: If configuration parameters are invalid
+        """
+        if self.config.batch_size > self.max_requests_per_batch:
+            raise ValueError(
+                f"batch_size {self.config.batch_size} is greater than the maximum of "
+                f"{self.max_requests_per_batch:,} requests per batch that {self.__class__.__name__} supports. "
+                f"Please set your batch_size to be less than or equal to {self.max_requests_per_batch:,}."
+            )
 
     def _attempt_loading_batch_status_tracker(self, request_files: set[str]):
         """Load existing batch status tracker or create new one.

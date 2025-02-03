@@ -90,6 +90,15 @@ class BaseOnlineRequestProcessor(BaseRequestProcessor, ABC):
         """Backend property."""
         return "base"
 
+    def validate_config(self):
+        """Validate online request processor configuration.
+
+        Ensures that configuration parameters are set correctly.
+
+        Raises:
+            ValueError: If configuration parameters are invalid
+        """
+
     @property
     def max_concurrent_requests(self) -> int | None:
         """Gets the maximum concurrent requests rate limit.

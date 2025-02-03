@@ -62,6 +62,16 @@ class BaseRequestProcessor(ABC):
         return "base"
 
     @abstractmethod
+    def validate_config(self):
+        """Validate request processor configuration.
+
+        Ensures that configuration parameters are set correctly.
+
+        Raises:
+            ValueError: If configuration parameters are invalid
+        """
+
+    @abstractmethod
     def requests_to_responses(self, generic_request_files: list[str]) -> None:
         """Process request files and generate responses.
 
@@ -109,6 +119,7 @@ class BaseRequestProcessor(ABC):
             return output_dataset
         logger.info(f"Running {self.__class__.__name__} completions with model: {self.config.model}")
 
+        self.validate_config()
         self.prompt_formatter = prompt_formatter
         if self.prompt_formatter.response_format:
             if not self.check_structured_output_support():
