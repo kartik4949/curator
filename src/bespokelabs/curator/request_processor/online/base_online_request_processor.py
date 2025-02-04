@@ -98,6 +98,7 @@ class BaseOnlineRequestProcessor(BaseRequestProcessor, ABC):
         Raises:
             ValueError: If configuration parameters are invalid
         """
+        pass
 
     @property
     def max_concurrent_requests(self) -> int | None:

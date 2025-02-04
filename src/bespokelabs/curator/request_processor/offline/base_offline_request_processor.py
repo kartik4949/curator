@@ -82,6 +82,7 @@ class BaseOfflineRequestProcessor(BaseRequestProcessor, ABC):
         Raises:
             ValueError: If configuration parameters are invalid
         """
+        pass
 
     def load_offline_model(self):
         """Load the offline model into memory.

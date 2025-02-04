@@ -70,6 +70,7 @@ class BaseRequestProcessor(ABC):
         Raises:
             ValueError: If configuration parameters are invalid
         """
+        pass
 
     @abstractmethod
     def requests_to_responses(self, generic_request_files: list[str]) -> None:
