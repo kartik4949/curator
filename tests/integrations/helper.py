@@ -23,7 +23,13 @@ class QAs(BaseModel):
 
 
 class BasicLLM(curator.LLM):
+    def __init__(self, *args, **kwargs):
+        self.raw_prompt = kwargs.pop("raw_prompt", False)
+        super().__init__(*args, **kwargs)
+
     def prompt(self, input: dict) -> str:
+        if self.raw_prompt:
+            return [{"role": "user", "content": input["text"]}]
         return input["dish"]
 
     def parse(self, input: dict, response) -> dict:
@@ -54,8 +60,15 @@ class Poems(BaseModel):
 class Poet(curator.LLM):
     response_format = Poems
 
+    def __init__(self, *args, **kwargs):
+        self.raw_prompt = kwargs.pop("raw_prompt", False)
+        super().__init__(*args, **kwargs)
+
     def prompt(self, input: dict) -> str:
-        return "Write two simple poems."
+        prompt = "Write two simple poems."
+        if self.raw_prompt:
+            return [{"role": "user", "content": prompt}]
+        return prompt
 
     def parse(self, input: dict, response: Poems) -> dict:
         return [{"poem": p} for p in response.poems_list]
@@ -147,6 +160,7 @@ def create_basic(
     model=None,
     return_prompter=False,
     batch_check_interval=1,
+    raw_prompt=False,
 ):
     llm_params = llm_params or {}
     if batch:
@@ -158,6 +172,7 @@ def create_basic(
             backend=backend,
             batch=batch,
             backend_params=llm_params,
+            raw_prompt=raw_prompt,
         )
     else:
         prompter = BasicLLM(
@@ -165,6 +180,7 @@ def create_basic(
             backend=backend,
             batch=batch,
             backend_params=llm_params,
+            raw_prompt=raw_prompt,
         )
     prompter._request_processor._tracker_console = tracker_console
     if mocking:
