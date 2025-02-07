@@ -1,4 +1,5 @@
 import datetime
+import gc
 import hashlib
 import importlib
 import logging
@@ -184,6 +185,8 @@ def test_resume(caplog, temp_working_dir, mock_dataset):
         with pytest.raises(TimeoutError):
             with Timeout(5):
                 helper.create_basic(temp_working_dir, mock_dataset, llm_params={"max_requests_per_minute": 1})
+        # Explicity garbage collect the rich live object.
+        gc.collect()
 
         logger = "bespokelabs.curator.request_processor.online.base_online_request_processor"
         with caplog.at_level(logging.INFO, logger=logger):
