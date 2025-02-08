@@ -261,9 +261,9 @@ def _get_function_hash(func) -> str:
         func.__annotations__ = {}
 
     file = BytesIO()
-    from datasets.utils._dill import Pickler
+    import dill
 
-    Pickler(file, recurse=True).dump(func)
+    dill.dump(func, file)
     return xxh64(file.getvalue()).hexdigest()
 
 
