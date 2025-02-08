@@ -92,3 +92,21 @@ def test_basic_multimodal_image_url_local(temp_working_dir):
         dataset = prompter(dataset=dataset, working_dir=temp_working_dir)
         recipes = "".join([recipe[0] for recipe in dataset.to_pandas().values.tolist()])
         assert _hash_string(recipes) == hash_book[backend]
+
+
+@pytest.mark.parametrize("temp_working_dir", ([{"integration": "litellm"}]), indirect=True)
+def test_basic_multimodal_file_local_url(temp_working_dir):
+    temp_working_dir, backend, vcr_config = temp_working_dir
+    hash_book = {
+        "litellm": "d9257e3cbf533d1e9a1f82a5d6ab286eedb46900a939e4ac3146937a621afa6c",
+    }
+
+    url = "./tests/integrations/common_fixtures/sample.pdf"
+    dataset = Dataset.from_dict({"pdf": [url], "text": ["Describe the pdf"]})
+
+    with vcr_config.use_cassette("basic_multimodal_file_local_url_completion.yaml"):
+        model_name = "gemini/gemini-2.0-flash"
+        prompter = helper.create_multimodal_llm(model=model_name, backend=backend, input_type="file")
+        dataset = prompter(dataset=dataset, working_dir=temp_working_dir)
+        recipes = "".join([recipe[0] for recipe in dataset.to_pandas().values.tolist()])
+        assert _hash_string(recipes) == hash_book[backend]
