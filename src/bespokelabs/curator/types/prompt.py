@@ -6,7 +6,7 @@ import typing as t
 from io import BytesIO
 
 from PIL import Image as PIL_Image
-from pydantic import BaseModel, ConfigDict, Field, field_serializer, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator, model_validator
 
 
 class BaseType(BaseModel):
@@ -87,11 +87,14 @@ class File(BaseType):
     mime_type: str | None = Field(None, description="The MIME type of the file.")
     type: t.ClassVar[str] = "file"
 
-    def __post_init__(self):
-        """Post init."""
-        if not self.mime_type:
-            mime_type, _ = mimetypes.guess_type(self.url)
-            self.mime_type = mime_type.lower()
+    @field_validator("mime_type", mode="before")
+    @classmethod
+    def set_mime_type(cls, value, values):
+        """Set MIME type if not provided."""
+        if value is None and "url" in values.data:
+            mime_type, _ = mimetypes.guess_type(values.data["url"])
+            return mime_type.lower() if mime_type else None
+        return value
 
     def serialize(self) -> str:
         """Convert file to base64."""
