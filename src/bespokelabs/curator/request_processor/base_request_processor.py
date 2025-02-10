@@ -53,7 +53,7 @@ class BaseRequestProcessor(ABC):
         logger.debug(f"Adjusting file descriptor limit from {soft} to {desired_limit} (hard limit: {hard})")
         resource.setrlimit(resource.RLIMIT_NOFILE, (desired_limit, hard))
         self.config = config
-        self._cost_processor = cost_processor_factory(self.backend)
+        self._cost_processor = cost_processor_factory(config=self.config, backend=self.backend)
 
     @property
     @abstractmethod

@@ -46,7 +46,7 @@ class OpenAIOnlineRequestProcessor(BaseOnlineRequestProcessor, OpenAIRequestMixi
     def __init__(self, config: OnlineRequestProcessorConfig, compatible_provider: str = None):
         """Initialize the OpenAIOnlineRequestProcessor."""
         super().__init__(config)
-        self._cost_processor = cost_processor_factory(compatible_provider or self.backend)
+        self._cost_processor = cost_processor_factory(config=config, backend=compatible_provider or self.backend)
 
         if self.config.base_url is None:
             if "OPENAI_BASE_URL" in os.environ:

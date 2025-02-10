@@ -6,6 +6,15 @@ from pydantic import BaseModel, Field, ValidationError
 logger = logging.getLogger(__name__)
 
 
+class _CostMap(BaseModel):
+    """BaseModel for cost map."""
+
+    input: int
+    output: int
+    provider: str = "openai"
+    max_tokens: int = 8192
+
+
 class RequestProcessorConfig(BaseModel):
     """Configuration for request processors.
 
@@ -19,6 +28,7 @@ class RequestProcessorConfig(BaseModel):
         require_all_responses: Whether to require successful responses for all requests
         generation_params: Dictionary of model-specific generation parameters
         api_key: Optional API key for authentication
+        cost_per_token_map: Optional cost map for input and output tokens
     """
 
     model: str
@@ -29,6 +39,7 @@ class RequestProcessorConfig(BaseModel):
     generation_params: dict = Field(default_factory=dict)
     return_completions_object: bool = False
     api_key: str | None = None
+    cost_per_token_map: _CostMap | None = None
 
     class Config:
         """BaseModel Setup class."""

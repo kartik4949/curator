@@ -10,12 +10,22 @@ logger = logging.getLogger(__name__)
 
 
 class _LitellmCostProcessor:
-    def __init__(self, batch=False) -> None:
+    def __init__(self, config, batch=False) -> None:
         self.batch = batch
+        self.cost_per_token_map = config.cost_per_token_map
+        if self.cost_per_token_map:
+            litellm.register_model(
+                {
+                    config.model: {
+                        "max_tokens": self.cost_per_token_map.max_tokens,
+                        "input_cost_per_token": self.cost_per_token_map.input,
+                        "output_cost_per_token": self.cost_per_token_map.output,
+                        "litellm_provider": self.cost_per_token_map.provider,
+                    }
+                }
+            )
 
     def cost(self, *, completion_window="*", **kwargs):
-        import litellm
-
         if "completion_response" in kwargs:
             model = kwargs["completion_response"]["model"]
         else:
@@ -62,9 +72,9 @@ def external_model_cost(model, completion_window="*", provider="default"):
 class _KlusterAICostProcessor(_LitellmCostProcessor):
     _registered_models = set()
 
-    def __init__(self, batch=False) -> None:
+    def __init__(self, config, batch=False) -> None:
         self.batch = batch
-        super().__init__(batch=batch)
+        super().__init__(config=config, batch=batch)
 
     @staticmethod
     def _wrap(model, completion_window):
@@ -90,9 +100,9 @@ class _KlusterAICostProcessor(_LitellmCostProcessor):
 class _InferenceNetCostProcessor(_LitellmCostProcessor):
     _registered_models = set()
 
-    def __init__(self, batch=False) -> None:
+    def __init__(self, config, batch=False) -> None:
         self.batch = batch
-        super().__init__(batch=batch)
+        super().__init__(config=config, batch=batch)
 
     @staticmethod
     def _wrap(model, completion_window):
@@ -119,6 +129,6 @@ COST_PROCESSOR["klusterai"] = _KlusterAICostProcessor
 COST_PROCESSOR["inference.net"] = _InferenceNetCostProcessor
 
 
-def cost_processor_factory(backend, batch=False):
+def cost_processor_factory(backend, config=None, batch=False):
     """Factory function to return the cost processor for the given backend."""
-    return COST_PROCESSOR[backend](batch=batch)
+    return COST_PROCESSOR[backend](config=config, batch=batch)
