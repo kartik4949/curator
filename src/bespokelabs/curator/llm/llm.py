@@ -264,7 +264,12 @@ def _get_function_hash(func) -> str:
 
     from datasets.utils._dill import Pickler
 
-    Pickler(file, recurse=True).dump(func)
+    try:
+        Pickler(file, recurse=True).dump(func)
+    except TypeError:
+        logger.debug("Failed to recursive pickle function, trying non-recursive")
+        Pickler(file, recurse=False).dump(func)
+
     return xxh64(file.getvalue()).hexdigest()
 
 

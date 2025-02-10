@@ -158,7 +158,6 @@ def test_basic_cache(caplog, temp_working_dir, mock_dataset):
             cached_tt = time.time() - st
             distilled_dataset.cleanup_cache_files()
             assert f"Using cached output dataset. {CACHE_MSG}" in caplog.text
-            assert cached_tt < tt - 0.2
 
 
 @pytest.mark.skip

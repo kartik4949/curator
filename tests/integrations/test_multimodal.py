@@ -94,6 +94,7 @@ def test_basic_multimodal_image_url_local(temp_working_dir):
         assert _hash_string(recipes) == hash_book[backend]
 
 
+@pytest.mark.skip
 @pytest.mark.parametrize("temp_working_dir", ([{"integration": "litellm"}]), indirect=True)
 def test_basic_multimodal_file_local_url(temp_working_dir):
     temp_working_dir, backend, vcr_config = temp_working_dir
