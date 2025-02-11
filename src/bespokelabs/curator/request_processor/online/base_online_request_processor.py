@@ -412,6 +412,9 @@ class BaseOnlineRequestProcessor(BaseRequestProcessor, ABC):
                     while not status_tracker.has_capacity(token_estimate):
                         await asyncio.sleep(0.1)
 
+                    # Wait for rate limits cool down if needed
+                    await self.cool_down_if_rate_limit_error(status_tracker)
+
                     # Consume capacity before making request
                     status_tracker.consume_capacity(token_estimate)
 
