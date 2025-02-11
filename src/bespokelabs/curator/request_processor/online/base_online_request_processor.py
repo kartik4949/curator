@@ -295,6 +295,7 @@ class BaseOnlineRequestProcessor(BaseRequestProcessor, ABC):
         if remaining_seconds_to_pause > 0:
             logger.warn(f"Pausing for {int(remaining_seconds_to_pause)} seconds")
             await asyncio.sleep(remaining_seconds_to_pause)
+            status_tracker.last_update_time = time.time()
 
     def free_capacity(self, tracker, tokens):
         """Free blocked capacity."""
