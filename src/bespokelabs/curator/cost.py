@@ -12,15 +12,20 @@ logger = logging.getLogger(__name__)
 class _LitellmCostProcessor:
     def __init__(self, config, batch=False) -> None:
         self.batch = batch
-        self.cost_per_token_map = config.cost_per_token_map
-        if self.cost_per_token_map:
+        if config.in_mtok_cost is not None:
+            cost_per_input_token = config.in_mtok_cost / 1e6
+            if config.out_mtok_cost is not None:
+                cost_per_output_token = config.out_mtok_cost / 1e6
+            else:
+                cost_per_output_token = cost_per_input_token
+
             litellm.register_model(
                 {
                     config.model: {
-                        "max_tokens": self.cost_per_token_map.max_tokens,
-                        "input_cost_per_token": self.cost_per_token_map.input,
-                        "output_cost_per_token": self.cost_per_token_map.output,
-                        "litellm_provider": self.cost_per_token_map.provider,
+                        "max_tokens": 8192,
+                        "input_cost_per_token": cost_per_input_token,
+                        "output_cost_per_token": cost_per_output_token,
+                        "litellm_provider": "openai",
                     }
                 }
             )
