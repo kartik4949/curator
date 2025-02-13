@@ -36,3 +36,8 @@ class GenericBatch(BaseModel):
     request_counts: GenericBatchRequestCounts  # Statistics about the requests
     raw_status: str  # Raw status string from the API
     raw_batch: dict  # Complete raw batch data from the API
+
+    model_config = {
+        "use_enum_values": True,  # Allow non-serializable types
+        "json_encoders": {datetime.datetime: lambda dt: dt.isoformat()},
+    }
