@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import typing as t
 from functools import lru_cache
 
 import vertexai
@@ -139,7 +140,21 @@ class GeminiBatchRequestProcessor(BaseBatchRequestProcessor):
         # https://cloud.google.com/vertex-ai/generative-ai/docs/quotas#batch-requests
         return 4
 
-    def parse_api_specific_request_counts(self, batch: "BatchPredictionJob") -> GenericBatchRequestCounts:
+    # ruff: noqa: B019
+    @lru_cache
+    def get_n_requests_in_file(self, request_file: str) -> int:
+        """Returns the number of requests in a request file.
+
+        Args:
+            request_file: Path to the request file.
+
+        Returns:
+            int: Number of requests in the file.
+        """
+        with open(request_file) as f:
+            return sum(1 for _ in f)
+
+    def parse_api_specific_request_counts(self, batch: "BatchPredictionJob", request_file: t.Optional[str] = None) -> GenericBatchRequestCounts:
         """Converts Gemini-specific request counts to generic format.
 
         Handles the following Gemini request count statuses:
@@ -149,6 +164,8 @@ class GeminiBatchRequestProcessor(BaseBatchRequestProcessor):
 
         Args:
             batch: Gemini's BatchPredictionJob object.
+            request_file: Path to the request file.
+
 
         Returns:
             GenericBatchRequestCounts: Standardized request count format.
@@ -156,12 +173,13 @@ class GeminiBatchRequestProcessor(BaseBatchRequestProcessor):
         # TODO: bug in google python sdk, completion_stats are empty
         # TODO: Use batch.completion_stats when it's fixed
         processing = succeeded = failed = 0
+        n_requests = self.get_n_requests_in_file(request_file)
         if batch.state.name in _PROGRESS:
-            processing = self.max_requests_per_batch
+            processing = n_requests
         elif batch.state.name in _FINISHED:
-            succeeded = self.max_requests_per_batch
+            succeeded = n_requests
         elif batch.state.name in _FAILED:
-            failed = self.max_requests_per_batch
+            failed = n_requests
         return GenericBatchRequestCounts(
             failed=failed,
             succeeded=succeeded,
@@ -198,7 +216,7 @@ class GeminiBatchRequestProcessor(BaseBatchRequestProcessor):
             finished_at=batch.update_time,
             status=status,
             api_key_suffix="gs",
-            request_counts=self.parse_api_specific_request_counts(batch),
+            request_counts=self.parse_api_specific_request_counts(batch, request_file=request_file),
             raw_batch=batch.to_dict(),
             raw_status=batch.state.name,
         )
