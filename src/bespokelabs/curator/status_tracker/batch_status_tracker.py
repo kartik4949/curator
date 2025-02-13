@@ -1,5 +1,6 @@
 """Module for tracking the status of batches during curation."""
 
+import json
 import logging
 import time
 from typing import Optional
@@ -118,7 +119,7 @@ class BatchStatusTracker(BaseModel):
         telemetry_client.capture(
             TelemetryEvent(
                 event_type="BatchRequest",
-                metadata=self.json(),
+                metadata=json.loads(self.json()),
             )
         )
 
