@@ -31,6 +31,7 @@ class BatchStatusTracker(BaseModel):
     model_config = {
         "arbitrary_types_allowed": True,  # Allow non-serializable types
         "exclude": {"console", "progress", "task_id"},  # Exclude from serialization
+        "json_encoders": {set: list},
     }
 
     n_total_requests: int = Field(default=0)
@@ -117,7 +118,7 @@ class BatchStatusTracker(BaseModel):
         telemetry_client.capture(
             TelemetryEvent(
                 event_type="BatchRequest",
-                metadata=self.model_dump(),
+                metadata=self.json(),
             )
         )
 
