@@ -154,13 +154,14 @@ class GeminiBatchRequestProcessor(BaseBatchRequestProcessor):
             GenericBatchRequestCounts: Standardized request count format.
         """
         # TODO: bug in google python sdk, completion_stats are empty
+        # TODO: Use batch.completion_stats when it's fixed
         processing = succeeded = failed = 0
         if batch.state.name in _PROGRESS:
-            processing = batch.completion_stats.incomplete_count
+            processing = self.max_requests_per_batch
         elif batch.state.name in _FINISHED:
-            succeeded = batch.completion_stats.successful_count
+            succeeded = self.max_requests_per_batch
         elif batch.state.name in _FAILED:
-            failed = batch.completion_stats.failed_count
+            failed = self.max_requests_per_batch
         return GenericBatchRequestCounts(
             failed=failed,
             succeeded=succeeded,
