@@ -146,23 +146,20 @@ class PromptFormatter:
 
         try:
             # First try to parse the response message as JSON
-            def _load_response_message(response_message: str | dict) -> dict:
+            def _load_response_message(response_message: str | dict) -> BaseModel:
                 try:
                     response_dict = json.loads(response_message)
+                    return self.response_format(**response_dict)
                 except json.JSONDecodeError as e:
                     logger.warning(f"Failed to parse response message as JSON: {response_message}. The model likely returned an invalid JSON format.")
                     raise e
-                return response_dict
 
             if isinstance(response_message, str):
-                response_dict = _load_response_message(response_message)
-                response_message = self.response_format(**response_dict)
+                response_message = _load_response_message(response_message)
             elif isinstance(response_message, list):
-                response_dicts = list(map(_load_response_message, response_message))
-                response_message = list(map(lambda r: self.response_format(**r), response_dicts))  # noqa: C417
+                response_message = list(map(_load_response_message, response_message))
             else:
-                response_dict = response_message
-                response_message = self.response_format(**response_dict)
+                response_message = self.response_format(**response_message)
 
             return response_message
 
