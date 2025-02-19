@@ -14,7 +14,7 @@ from bespokelabs.curator.client import Client
 from bespokelabs.curator.constants import _CURATOR_DEFAULT_CACHE_DIR
 from bespokelabs.curator.db import MetadataDB
 from bespokelabs.curator.llm.prompt_formatter import PromptFormatter
-from bespokelabs.curator.log import add_file_handler, logger
+from bespokelabs.curator.log import logger
 from bespokelabs.curator.request_processor._factory import _RequestProcessorFactory
 from bespokelabs.curator.request_processor.config import BackendParamsType
 
