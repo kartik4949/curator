@@ -1,5 +1,4 @@
 import datetime
-import logging
 import time
 from collections import defaultdict
 
@@ -9,14 +8,13 @@ import litellm
 from pydantic import BaseModel
 
 from bespokelabs.curator.file_utilities import get_base64_size
+from bespokelabs.curator.log import logger
 from bespokelabs.curator.request_processor.config import OnlineRequestProcessorConfig
 from bespokelabs.curator.request_processor.event_loop import run_in_event_loop
 from bespokelabs.curator.request_processor.online.base_online_request_processor import APIRequest, BaseOnlineRequestProcessor
 from bespokelabs.curator.status_tracker.online_status_tracker import OnlineStatusTracker, TokenLimitStrategy, _TokenCount
 from bespokelabs.curator.types.generic_request import GenericRequest
 from bespokelabs.curator.types.generic_response import GenericResponse, TokenUsage
-
-logger = logging.getLogger(__name__)
 
 litellm.suppress_debug_info = True
 
@@ -86,7 +84,7 @@ class LiteLLMOnlineRequestProcessor(BaseOnlineRequestProcessor):
         """
         max_concurrent_requests = super().max_concurrent_requests
         if max_concurrent_requests is None and self._concurrency_only_rate_limited:
-            logging.info(f"Current provider implements concurrency only rate limit, Using default concurrency of {self.default_max_concurrent_requests}")
+            logger.info(f"Current provider implements concurrency only rate limit, Using default concurrency of {self.default_max_concurrent_requests}")
             return self.default_max_concurrent_requests
         return max_concurrent_requests
 

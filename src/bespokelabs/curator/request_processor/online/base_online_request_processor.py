@@ -7,7 +7,6 @@ handling rate limiting, retries, and concurrent processing.
 import asyncio
 import datetime
 import json
-import logging
 import os
 import time
 import typing as t
@@ -19,6 +18,7 @@ import aiofiles
 import aiohttp
 
 from bespokelabs.curator.llm.prompt_formatter import PromptFormatter
+from bespokelabs.curator.log import logger
 from bespokelabs.curator.request_processor import _DEFAULT_COST_MAP
 from bespokelabs.curator.request_processor.base_request_processor import BaseRequestProcessor
 from bespokelabs.curator.request_processor.config import OnlineRequestProcessorConfig
@@ -27,9 +27,6 @@ from bespokelabs.curator.status_tracker.online_status_tracker import OnlineStatu
 from bespokelabs.curator.types.generic_request import GenericRequest
 from bespokelabs.curator.types.generic_response import GenericResponse
 from bespokelabs.curator.types.prompt import _MultiModalPrompt
-
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
 
 _MAX_OUTPUT_MVA_WINDOW = 50
 

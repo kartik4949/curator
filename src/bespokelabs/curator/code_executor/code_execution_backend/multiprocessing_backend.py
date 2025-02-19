@@ -1,15 +1,13 @@
 """Multiprocessing Code Execution Backend."""
 
 import asyncio
-import logging
 import os
 import subprocess
 from concurrent.futures import ProcessPoolExecutor
 
 from bespokelabs.curator.code_executor.code_execution_backend.base_backend import BaseCodeExecutionBackend
 from bespokelabs.curator.code_executor.types import CodeAPIRequest, CodeExecutionOutput, CodeExecutionRequest
-
-logger = logging.getLogger(__name__)
+from bespokelabs.curator.log import logger
 
 
 class MultiprocessingCodeExecutionBackend(BaseCodeExecutionBackend):

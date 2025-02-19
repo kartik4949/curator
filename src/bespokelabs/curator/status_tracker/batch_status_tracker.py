@@ -1,7 +1,6 @@
 """Module for tracking the status of batches during curation."""
 
 import json
-import logging
 import time
 from typing import Optional
 
@@ -16,11 +15,10 @@ from rich.table import Table
 from bespokelabs.curator import _CONSOLE
 from bespokelabs.curator.client import Client
 from bespokelabs.curator.constants import PUBLIC_CURATOR_VIEWER_HOME_URL
+from bespokelabs.curator.log import logger
 from bespokelabs.curator.telemetry.client import TelemetryEvent, telemetry_client
 from bespokelabs.curator.types.generic_batch import GenericBatch, GenericBatchStatus
 from bespokelabs.curator.types.generic_response import TokenUsage
-
-logger = logging.getLogger(__name__)
 
 
 class BatchStatusTracker(BaseModel):

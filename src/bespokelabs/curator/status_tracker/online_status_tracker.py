@@ -1,4 +1,3 @@
-import logging
 import time
 import typing as t
 from dataclasses import asdict, dataclass, field
@@ -18,10 +17,9 @@ from rich.table import Table
 from bespokelabs.curator import _CONSOLE
 from bespokelabs.curator.client import Client
 from bespokelabs.curator.constants import PUBLIC_CURATOR_VIEWER_HOME_URL
+from bespokelabs.curator.log import logger
 from bespokelabs.curator.telemetry.client import TelemetryEvent, telemetry_client
 from bespokelabs.curator.types.generic_response import TokenUsage
-
-logger = logging.getLogger(__name__)
 
 _TOKEN_LIMIT_STRATEGY_DESCRIPTION = {
     "combined": "combined input/output",

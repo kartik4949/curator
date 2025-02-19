@@ -1,5 +1,4 @@
 import json
-import logging
 import os
 import typing as t
 import uuid
@@ -8,9 +7,7 @@ import httpx
 import requests
 
 from bespokelabs.curator.constants import BASE_CLIENT_URL, PUBLIC_CURATOR_VIEWER_DATASET_URL
-
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+from bespokelabs.curator.log import logger
 
 
 class _SessionStatus:

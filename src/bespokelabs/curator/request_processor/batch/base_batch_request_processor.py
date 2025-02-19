@@ -1,12 +1,12 @@
 import asyncio
 import json
-import logging
 import os
 from abc import abstractmethod
 from typing import Optional
 
 from litellm import model_cost
 
+from bespokelabs.curator.log import logger
 from bespokelabs.curator.request_processor.base_request_processor import BaseRequestProcessor
 from bespokelabs.curator.request_processor.config import BatchRequestProcessorConfig
 from bespokelabs.curator.request_processor.event_loop import run_in_event_loop
@@ -15,8 +15,6 @@ from bespokelabs.curator.types.generic_batch import GenericBatch, GenericBatchRe
 from bespokelabs.curator.types.generic_request import GenericRequest
 from bespokelabs.curator.types.generic_response import GenericResponse
 from bespokelabs.curator.types.token_usage import TokenUsage
-
-logger = logging.getLogger(__name__)
 
 
 class BaseBatchRequestProcessor(BaseRequestProcessor):

@@ -4,7 +4,6 @@ import asyncio
 import glob
 import io
 import json
-import logging
 import os
 import resource
 import tarfile
@@ -20,12 +19,12 @@ from bespokelabs.curator.code_executor.code_formatter import CodeFormatter
 from bespokelabs.curator.code_executor.tracker import CodeExecutionStatusTracker
 from bespokelabs.curator.code_executor.types import CodeAPIRequest, CodeExecutionOutput, CodeExecutionRequest, CodeExecutionResponse
 from bespokelabs.curator.file_utilities import count_lines
+from bespokelabs.curator.log import logger
 from bespokelabs.curator.request_processor.event_loop import run_in_event_loop
 
 if TYPE_CHECKING:
     from datasets import Dataset
 
-logger = logging.getLogger(__name__)
 
 CACHE_MSG = "If you want to regenerate the dataset, disable or delete the cache."
 
