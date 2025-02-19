@@ -511,7 +511,7 @@ class BaseOnlineRequestProcessor(BaseRequestProcessor, ABC):
                 retry_queue.put_nowait(request)
             else:
                 error_counts = Counter(str(err) for err in request.result)
-                formatted_errors = [f"{count}x {error}" for error, count in error_counts.items()]
+                formatted_errors = [f"{error}(x{count})" for error, count in error_counts.items()]
                 logger.error(
                     f"Request {request.task_id} failed permanently after exhausting all {self.config.max_retries} retry attempts. "
                     f"Errors: {formatted_errors}"
