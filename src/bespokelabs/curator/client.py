@@ -25,11 +25,12 @@ class _SessionStatus:
 class Client:
     """A class to represent the client for the Curator Viewer."""
 
-    def __init__(self) -> None:
+    def __init__(self, hosted: bool = False) -> None:
         """Initialize the client."""
         self._session = None
         self._state = None
         self._hosted = os.environ.get("HOSTED_CURATOR_VIEWER") in ["True", "true", "1", "t"]
+        self._hosted = self._hosted or hosted
 
     @property
     def session(self):
@@ -46,8 +47,11 @@ class Client:
         """Get the curator viewer URL."""
         return f"{PUBLIC_CURATOR_VIEWER_DATASET_URL}/{self.session}" if self.session else None
 
-    def create_session(self, metadata: t.Dict):
+    def create_session(self, metadata: t.Dict, verbose: bool = True) -> str | None:
         """Sends a POST request to the server to create a session."""
+        if "HOSTED_CURATOR_VIEWER" not in os.environ:
+            if verbose:
+                logger.info("Set HOSTED_CURATOR_VIEWER=1 to view your data live at https://curator.bespokelabs.ai/datasets/.")
         if not self.hosted:
             return str(uuid.uuid4().hex)
 
@@ -62,7 +66,8 @@ class Client:
             self._state = _SessionStatus.STARTED
             return self.session
         else:
-            logger.warning(f"Failed to create session: {response.status_code}, {response.text}")
+            if verbose:
+                logger.warning(f"Failed to create session: {response.status_code}, {response.text}")
             return str(uuid.uuid4().hex)
 
     async def _update_state(self):
@@ -81,6 +86,13 @@ class Client:
     async def session_completed(self):
         """Updates the session status to completed."""
         self._state = _SessionStatus.COMPLETED
+        if not self._hosted and not self.session:
+            return
+        await self._update_state()
+
+    async def session_failed(self):
+        """Updates the session status to failed."""
+        self._state = _SessionStatus.FAILED
         if not self._hosted and not self.session:
             return
         await self._update_state()
