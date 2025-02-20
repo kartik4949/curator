@@ -5,6 +5,7 @@ import typing as t
 import uuid
 
 from datasets import Dataset, load_dataset
+from tqdm import tqdm
 
 from bespokelabs.curator import _CONSOLE, constants
 from bespokelabs.curator.client import Client, _SessionStatus
@@ -13,13 +14,13 @@ from bespokelabs.curator.request_processor.event_loop import run_in_event_loop
 logger = logging.getLogger(__name__)
 
 
-def push_to_viewer(dataset: Dataset | str, hf_params: t.Optional[t.Dict] = None, chunk_size: int = 100):
+def push_to_viewer(dataset: Dataset | str, hf_params: t.Optional[t.Dict] = None, max_concurrent_requests: int = 100):
     """Push a dataset to the Curator Viewer.
 
     Args:
         dataset (Dataset | str): The dataset to push to the Curator Viewer.
         hf_params: (dict): Huggingface parameters for load dataset.
-        chunk_size (int): The size of the chunks to push the dataset in.
+        max_concurrent_requests (int): Max concurrent requests limit.
 
     Returns:
         str: The URL to view the data
@@ -35,7 +36,7 @@ def push_to_viewer(dataset: Dataset | str, hf_params: t.Optional[t.Dict] = None,
         "run_hash": uid,
         "dataset_hash": uid,
         "prompt_func": "N/A",
-        "model_name": "*",
+        "model_name": "simulated_dataset",
         "response_format": "N/A",
         "batch_mode": False,
         "status": _SessionStatus.STARTED,
@@ -52,22 +53,22 @@ def push_to_viewer(dataset: Dataset | str, hf_params: t.Optional[t.Dict] = None,
         f"[dim]{view_url}[/dim]\n"
     )
     _CONSOLE.print(viewer_text)
-    num_shards = (len(dataset) // chunk_size) + 1
+    semaphore = asyncio.Semaphore(max_concurrent_requests)
+
+    progress_bar = tqdm(total=len(dataset), desc="Uploading dataset rows", position=0, leave=True)
 
     async def send_responses():
         async def send_row(idx, row):
             response_data = {"parsed_response_message": [row]}
             response_data_json = json.dumps(response_data)
-            await client.stream_response(response_data_json, idx)
+            async with semaphore:
+                await client.stream_response(response_data_json, idx)
+            progress_bar.update(1)
 
-        async def process_shard(shard_idx):
-            shard = dataset.shard(num_shards=num_shards, index=shard_idx)
-            tasks = [send_row(idx, row) for idx, row in enumerate(shard, start=shard_idx * len(shard))]
-            await asyncio.gather(*tasks)
+        tasks = [send_row(idx, row) for idx, row in enumerate(dataset)]
 
-        for shard_idx in range(num_shards):
-            await process_shard(shard_idx)
-
+        await asyncio.gather(*tasks)
+        progress_bar.close()
         await client.session_completed()
 
     run_in_event_loop(send_responses())
