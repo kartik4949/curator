@@ -13,8 +13,9 @@ logger = logging.getLogger(__name__)
 
 def _random_distinct_id():
     # check if cache
-    os.makedirs(_DEFAULT_CACHE_DIR, exist_ok=True)
-    distinct_id_file = os.path.join(_DEFAULT_CACHE_DIR, ".curator_config")
+    default_cache_dir = os.path.expanduser(_DEFAULT_CACHE_DIR)
+    os.makedirs(default_cache_dir, exist_ok=True)
+    distinct_id_file = os.path.join(default_cache_dir, ".curator_config")
 
     if os.path.exists(distinct_id_file):
         with open(distinct_id_file) as f:
