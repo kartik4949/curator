@@ -6,7 +6,7 @@ import uuid
 
 from datasets import Dataset, load_dataset
 
-from bespokelabs.curator import constants
+from bespokelabs.curator import _CONSOLE, constants
 from bespokelabs.curator.client import Client, _SessionStatus
 from bespokelabs.curator.request_processor.event_loop import run_in_event_loop
 
@@ -41,13 +41,17 @@ def push_to_viewer(dataset: Dataset | str, hf_params: t.Optional[t.Dict] = None,
         "status": _SessionStatus.STARTED,
     }
 
-    session_id = client.create_session(metadata, verbose=False)
+    session_id = client.create_session(metadata)
     if not client.session:
-        logger.error("Failed to create session.")
         raise Exception("Failed to create session.")
 
     view_url = f"{constants.PUBLIC_CURATOR_VIEWER_DATASET_URL}/{session_id}"
-    logger.info(f"View your data live at: {view_url}")
+    viewer_text = (
+        f"[bold white]Curator Viewer:[/bold white] "
+        f"[blue][link={view_url}]:sparkles: Open Curator Viewer[/link] :sparkles:[/blue]\n"
+        f"[dim]{view_url}[/dim]\n"
+    )
+    _CONSOLE.print(viewer_text)
     num_shards = (len(dataset) // chunk_size) + 1
 
     async def send_responses():

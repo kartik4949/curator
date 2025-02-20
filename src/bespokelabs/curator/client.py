@@ -47,11 +47,8 @@ class Client:
         """Get the curator viewer URL."""
         return f"{PUBLIC_CURATOR_VIEWER_DATASET_URL}/{self.session}" if self.session else None
 
-    def create_session(self, metadata: t.Dict, verbose: bool = True) -> str | None:
+    def create_session(self, metadata: t.Dict) -> str | None:
         """Sends a POST request to the server to create a session."""
-        if "HOSTED_CURATOR_VIEWER" not in os.environ:
-            if verbose:
-                logger.info("Set HOSTED_CURATOR_VIEWER=1 to view your data live at https://curator.bespokelabs.ai/datasets/.")
         if not self.hosted:
             return str(uuid.uuid4().hex)
 
@@ -66,8 +63,7 @@ class Client:
             self._state = _SessionStatus.STARTED
             return self.session
         else:
-            if verbose:
-                logger.warning(f"Failed to create session: {response.status_code}, {response.text}")
+            logger.warning(f"Failed to create session: {response.status_code}, {response.text}")
             return str(uuid.uuid4().hex)
 
     async def _update_state(self):
