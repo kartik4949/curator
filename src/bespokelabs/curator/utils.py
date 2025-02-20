@@ -46,7 +46,7 @@ def push_to_viewer(dataset: Dataset | str, hf_params: t.Optional[t.Dict] = None,
         logger.error("Failed to create session.")
         raise Exception("Failed to create session.")
 
-    view_url = f"{constants.PUBLIC_CURATOR_VIEWER_URL}/{session_id}"
+    view_url = f"{constants.PUBLIC_CURATOR_VIEWER_DATASET_URL}/{session_id}"
     logger.info(f"View your data live at: {view_url}")
     num_shards = (len(dataset) // chunk_size) + 1
 
