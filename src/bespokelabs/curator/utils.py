@@ -5,7 +5,7 @@ import typing as t
 import uuid
 
 from datasets import Dataset, load_dataset
-from tqdm import tqdm
+from rich.progress import Progress
 
 from bespokelabs.curator import _CONSOLE, constants
 from bespokelabs.curator.client import Client, _SessionStatus
@@ -55,21 +55,22 @@ def push_to_viewer(dataset: Dataset | str, hf_params: t.Optional[t.Dict] = None,
     _CONSOLE.print(viewer_text)
     semaphore = asyncio.Semaphore(max_concurrent_requests)
 
-    progress_bar = tqdm(total=len(dataset), desc="Uploading dataset rows", position=0, leave=True)
-
     async def send_responses():
-        async def send_row(idx, row):
-            response_data = {"parsed_response_message": [row]}
-            response_data_json = json.dumps(response_data)
-            async with semaphore:
-                await client.stream_response(response_data_json, idx)
-            progress_bar.update(1)
+        with Progress() as progress:
+            task = progress.add_task("[cyan]Uploading dataset rows...", total=len(dataset))
 
-        tasks = [send_row(idx, row) for idx, row in enumerate(dataset)]
+            async def send_row(idx, row):
+                nonlocal task, progress
+                response_data = {"parsed_response_message": [row]}
+                response_data_json = json.dumps(response_data)
+                async with semaphore:
+                    await client.stream_response(response_data_json, idx)
+                progress.update(task, advance=1)
 
-        await asyncio.gather(*tasks)
-        progress_bar.close()
-        await client.session_completed()
+            tasks = [send_row(idx, row) for idx, row in enumerate(dataset)]
+
+            await asyncio.gather(*tasks)
+            await client.session_completed()
 
     run_in_event_loop(send_responses())
     return view_url
